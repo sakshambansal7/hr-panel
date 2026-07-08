@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../context/auth-context";
 import RoleTabs from "../components/RoleTabs";
 import type { Role } from "../context/auth-context";
 
 export default function LoginForm() {
   const searchParams = useSearchParams();
-  const initialRole = searchParams.get("role") === "employer" ? "employer" : "seeker";
+  const initialRole = searchParams.get("role") === "employer" ? "seeker" : "employer";
 
   const { login } = useAuth();
   const router = useRouter();
@@ -19,9 +19,17 @@ export default function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
+  // Intercept role changes: if the user selects "seeker" (job seeker), send them to the tunnel URL
+  useEffect(() => {
+    if (role === "seeker") {
+      window.location.href = "https://nznf4dcd-3000.inc1.devtunnels.ms/login";
+    }
+  }, [role]);
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    
     const result = login(email, password, role);
     if (!result.ok) {
       setError(result.error);
@@ -39,6 +47,7 @@ export default function LoginForm() {
           Get hired, or find your next crew member.
         </p>
 
+        {/* Changes role state; triggering the seeker check above */}
         <RoleTabs role={role} onChange={setRole} />
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -81,12 +90,21 @@ export default function LoginForm() {
 
         <p className="mt-6 text-center text-sm text-zinc-600">
           New to MerchantNavyJobs?{" "}
-          <Link
-            href={`/signup${role === "employer" ? "?role=employer" : ""}`}
-            className="font-medium text-blue-900 hover:underline"
-          >
-            Create an account
-          </Link>
+          {role === "seeker" ? (
+            <a
+              href="https://nznf4dcd-3000.inc1.devtunnels.ms/signup"
+              className="font-medium text-blue-900 hover:underline"
+            >
+              Create an account
+            </a>
+          ) : (
+            <Link
+              href="/signup?role=employer"
+              className="font-medium text-blue-900 hover:underline"
+            >
+              Create an account
+            </Link>
+          )}
         </p>
       </div>
     </div>

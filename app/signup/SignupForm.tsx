@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../context/auth-context";
 import RoleTabs from "../components/RoleTabs";
 import type { Role } from "../context/auth-context";
@@ -15,11 +15,19 @@ export default function SignupForm() {
   const router = useRouter();
 
   const [role, setRole] = useState<Role>(initialRole);
-  const [name, setName] = useState("");
+  const [name, setName] = useState(""); // Used for Full Name (Seeker) or Contact Person Name (Employer)
+  const [companyName, setCompanyName] = useState(""); // Explicitly for Recruiter/Employer
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
+
+  // Auto-redirect job seekers away from the recruiter app to your live seafarer frontend app link
+  useEffect(() => {
+    if (role === "seeker") {
+      window.location.href = "https://nznf4dcd-3000.inc1.devtunnels.ms/signup";
+    }
+  }, [role]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -34,11 +42,23 @@ export default function SignupForm() {
       return;
     }
 
+    // Pass contact name down. If employer, you can store your custom companyName field via metadata payload configurations
     const result = signup(name, email, password, role);
     if (!result.ok) {
       setError(result.error);
       return;
     }
+
+    // Optional structure sync placeholder: If backend save handles object modifications, save local storage profiles here
+    if (role === "employer") {
+      const employerPayload = {
+        companyName: companyName.trim(),
+        contactName: name.trim(),
+        email: email.trim()
+      };
+      localStorage.setItem(`employer_meta_${email}`, JSON.stringify(employerPayload));
+    }
+
     router.push(role === "employer" ? "/employer/dashboard" : "/dashboard");
   }
 
@@ -55,19 +75,53 @@ export default function SignupForm() {
         <RoleTabs role={role} onChange={setRole} />
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700">
-              {role === "employer" ? "Company / contact name" : "Full name"}
-            </label>
-            <input
-              type="text"
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-950 focus:outline-none focus:ring-1 focus:ring-blue-950"
-              placeholder={role === "employer" ? "Acme Shipping Co." : "Jane Seafarer"}
-            />
-          </div>
+          {/* 1. Conditional Fields depending on selected active Tab */}
+          {role === "employer" ? (
+            <>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-zinc-700">
+                  Company Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  className="w-full rounded-md  text-gray-800 border border-zinc-300 px-3 py-2 text-sm focus:border-blue-950 focus:outline-none focus:ring-1 focus:ring-blue-950"
+                  placeholder="Company Name"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-zinc-700">
+                  User Name / Contact Person *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full rounded-md border text-gray-800 border-zinc-300 px-3 py-2 text-sm focus:border-blue-950 focus:outline-none focus:ring-1 focus:ring-blue-950"
+                  placeholder=" Company Admin"
+                />
+              </div>
+            </>
+          ) : (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-zinc-700">
+                Full name *
+              </label>
+              <input
+                type="text"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full rounded-md border text-gray-800 border-zinc-300 px-3 py-2 text-sm focus:border-blue-950 focus:outline-none focus:ring-1 focus:ring-blue-950"
+                placeholder="Jane Seafarer"
+              />
+            </div>
+          )}
+
+          {/* 2. Common Fields */}
           <div>
             <label className="mb-1 block text-sm font-medium text-zinc-700">
               Email address
@@ -77,8 +131,8 @@ export default function SignupForm() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-950 focus:outline-none focus:ring-1 focus:ring-blue-950"
-              placeholder="you@example.com"
+              className="w-full rounded-md border border-zinc-300 text-gray-800 px-3 py-2 text-sm focus:border-blue-950 focus:outline-none focus:ring-1 focus:ring-blue-950"
+              placeholder="recruiter@company.com"
             />
           </div>
           <div>
@@ -90,7 +144,7 @@ export default function SignupForm() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-950 focus:outline-none focus:ring-1 focus:ring-blue-950"
+              className="w-full rounded-md border border-zinc-300 px-3  text-gray-800 py-2 text-sm focus:border-blue-950 focus:outline-none focus:ring-1 focus:ring-blue-950"
               placeholder="At least 6 characters"
             />
           </div>
@@ -103,7 +157,7 @@ export default function SignupForm() {
               required
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-950 focus:outline-none focus:ring-1 focus:ring-blue-950"
+              className="w-full rounded-md border border-zinc-300   text-gray-800 px-3 py-2 text-sm focus:border-blue-950 focus:outline-none focus:ring-1 focus:ring-blue-950"
               placeholder="••••••••"
             />
           </div>
@@ -121,7 +175,7 @@ export default function SignupForm() {
         <p className="mt-6 text-center text-sm text-zinc-600">
           Already have an account?{" "}
           <Link
-            href={`/login${role === "employer" ? "?role=employer" : ""}`}
+            href={role === "seeker" ? "https://nznf4dcd-3000.inc1.devtunnels.ms/login" : "/login?role=employer"}
             className="font-medium text-blue-900 hover:underline"
           >
             Sign in

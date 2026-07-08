@@ -169,18 +169,3 @@ export function ShipIllustration({ className }: { className?: string }) {
   );
 }
 
-export function WaveDivider({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 1440 90"
-      preserveAspectRatio="none"
-      className={className}
-      aria-hidden="true"
-    >
-      <path
-        d="M0,32 C240,80 480,0 720,24 C960,48 1200,88 1440,40 L1440,90 L0,90 Z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}

@@ -1,10 +1,9 @@
 import Link from "next/link";
-import { AnchorIcon, WaveDivider } from "./icons";
+import { AnchorIcon,  } from "./icons";
 
 export default function Footer() {
   return (
     <footer className="relative bg-blue-950 mt-10 text-zinc-300">
-      <WaveDivider className="absolute -top-14.75 left-0 h-15 w-full text-blue-950" />
 
       <div className="mx-auto max-w-6xl px-4 pt-4 sm:px-6">
         <div className="flex items-center gap-2 pb-6">
