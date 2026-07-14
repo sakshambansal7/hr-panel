@@ -1,33 +1,91 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { useAuth } from "../context/auth-context";
-import RoleTabs from "../components/RoleTabs";
-import type { Role } from "../context/auth-context";
+
+const COMPANY_TYPES = [
+  "Manning Agent / RPSL Holder",
+  "Ship Owner",
+  "Ship Management Company",
+  "Crewing Agency",
+  "Cruise Line",
+  "Other Maritime Employer",
+];
+
+function SectionHeading({
+  step,
+  title,
+  description,
+}: {
+  step: number;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#0F172A] text-xs font-bold text-white">
+        {step}
+      </span>
+      <div>
+        <h2 className="text-base font-bold text-[#0F172A]">{title}</h2>
+        <p className="text-xs text-slate-500">{description}</p>
+      </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  required,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs font-semibold text-slate-700 tracking-wide uppercase">
+        {label}
+        {required && <span className="ml-0.5 text-[#FBBF24]">*</span>}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+const inputClass =
+  "w-full rounded-2xl border border-slate-200 bg-white py-3 px-4 text-sm text-[#0F172A] placeholder:text-slate-400 transition-all duration-200 focus:border-[#FBBF24] focus:outline-none focus:ring-4 focus:ring-[#FBBF24]/10";
 
 export default function SignupForm() {
-  const searchParams = useSearchParams();
-  const initialRole = searchParams.get("role") === "employer" ? "employer" : "seeker";
-
   const { signup } = useAuth();
   const router = useRouter();
 
-  const [role, setRole] = useState<Role>(initialRole);
-  const [name, setName] = useState(""); // Used for Full Name (Seeker) or Contact Person Name (Employer)
-  const [companyName, setCompanyName] = useState(""); // Explicitly for Recruiter/Employer
-  const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [designation, setDesignation] = useState("");
+  const [officialEmail, setOfficialEmail] = useState("");
+  const [mobileNumber, setMobileNumber] = useState("");
+  const [whatsappNumber, setWhatsappNumber] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState("");
 
-  // Auto-redirect job seekers away from the recruiter app to your live seafarer frontend app link
-  useEffect(() => {
-    if (role === "seeker") {
-      window.location.href = "https://nznf4dcd-3000.inc1.devtunnels.ms/signup";
-    }
-  }, [role]);
+  const [companyName, setCompanyName] = useState("");
+  const [companyType, setCompanyType] = useState("");
+  const [companyWebsite, setCompanyWebsite] = useState("");
+  const [officeAddress, setOfficeAddress] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [country, setCountry] = useState("India");
+
+  const [rpslNumber, setRpslNumber] = useState("");
+  const [rpslValidity, setRpslValidity] = useState("");
+  const [dgShippingDetails, setDgShippingDetails] = useState("");
+  const [companyRegNumber, setCompanyRegNumber] = useState("");
+  const [gstNumber, setGstNumber] = useState("");
+
+  const [error, setError] = useState("");
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -42,145 +100,258 @@ export default function SignupForm() {
       return;
     }
 
-    // Pass contact name down. If employer, you can store your custom companyName field via metadata payload configurations
-    const result = signup(name, email, password, role);
+    const result = signup(fullName, officialEmail, password, "employer");
     if (!result.ok) {
       setError(result.error);
       return;
     }
 
-    // Optional structure sync placeholder: If backend save handles object modifications, save local storage profiles here
-    if (role === "employer") {
-      const employerPayload = {
-        companyName: companyName.trim(),
-        contactName: name.trim(),
-        email: email.trim()
-      };
-      localStorage.setItem(`employer_meta_${email}`, JSON.stringify(employerPayload));
-    }
+    const employerProfile = {
+      fullName: fullName.trim(),
+      designation: designation.trim(),
+      officialEmail: officialEmail.trim(),
+      mobileNumber: mobileNumber.trim(),
+      whatsappNumber: whatsappNumber.trim(),
+      companyName: companyName.trim(),
+      companyType,
+      companyWebsite: companyWebsite.trim(),
+      officeAddress: officeAddress.trim(),
+      city: city.trim(),
+      state: state.trim(),
+      country: country.trim(),
+      rpslNumber: rpslNumber.trim(),
+      rpslValidity,
+      dgShippingDetails: dgShippingDetails.trim(),
+      companyRegNumber: companyRegNumber.trim(),
+      gstNumber: gstNumber.trim(),
+    };
+    localStorage.setItem(
+      `employer_meta_${officialEmail.trim().toLowerCase()}`,
+      JSON.stringify(employerProfile)
+    );
 
-    router.push(role === "employer" ? "/employer/dashboard" : "/dashboard");
+    router.push("/employer/dashboard");
   }
 
   return (
-    <div className="flex flex-1 items-center justify-center bg-zinc-50 px-4 py-12">
-      <div className="w-full max-w-sm rounded-lg border border-zinc-200 bg-white p-8 shadow-sm">
-        <h1 className="mb-1 text-2xl font-bold text-zinc-900">Create your account</h1>
-        <p className="mb-6 text-sm text-zinc-500">
-          {role === "employer"
-            ? "Post jobs and find qualified seafarers."
-            : "Get matched with maritime employers."}
-        </p>
+    <div className="flex min-h-screen w-full flex-col lg:flex-row bg-[#F8FAFC] font-sans antialiased selection:bg-[#FBBF24]/30">
+      {/* LEFT SECTION (Branding & Plan Info) */}
+      <div className="relative flex w-full flex-col justify-between overflow-hidden bg-linear-to-br from-[#0F172A] to-[#13294B] p-8 md:p-12 lg:w-2/5 lg:sticky lg:top-0 lg:h-screen">
+        <div className="absolute -left-1/4 -top-1/4 h-[80%] w-[80%] rounded-full bg-blue-500/10 blur-[120px] pointer-events-none" />
+        <div className="absolute -bottom-1/4 -right-1/4 h-[80%] w-[80%] rounded-full bg-amber-500/5 blur-[120px] pointer-events-none" />
 
-        <RoleTabs role={role} onChange={setRole} />
+        {/* Branding */}
+        <div className="relative z-10 flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-tr from-[#FBBF24] to-[#FCD34D] shadow-md shadow-[#FBBF24]/20">
+            <svg className="h-5 w-5 text-[#0F172A]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v14m0 0l-3-3m3 3l3-3M4 14a8 8 0 0016 0" />
+            </svg>
+          </div>
+          <div>
+            <span className="font-semibold text-lg tracking-tight text-white block">MND Jobs Employer Portal</span>
+            <span className="text-[10px] font-bold tracking-widest text-[#FBBF24] uppercase block">Verified Maritime Hiring</span>
+          </div>
+        </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* 1. Conditional Fields depending on selected active Tab */}
-          {role === "employer" ? (
-            <>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-zinc-700">
-                  Company Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                  className="w-full rounded-md  text-gray-800 border border-zinc-300 px-3 py-2 text-sm focus:border-blue-950 focus:outline-none focus:ring-1 focus:ring-blue-950"
-                  placeholder="Company Name"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-zinc-700">
-                  User Name / Contact Person *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full rounded-md border text-gray-800 border-zinc-300 px-3 py-2 text-sm focus:border-blue-950 focus:outline-none focus:ring-1 focus:ring-blue-950"
-                  placeholder=" Company Admin"
-                />
-              </div>
-            </>
-          ) : (
-            <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700">
-                Full name *
-              </label>
-              <input
-                type="text"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-md border text-gray-800 border-zinc-300 px-3 py-2 text-sm focus:border-blue-950 focus:outline-none focus:ring-1 focus:ring-blue-950"
-                placeholder="Jane Seafarer"
-              />
+        {/* Hero copy */}
+        <div className="relative z-10 my-10 space-y-3">
+          <span className="text-xs font-bold tracking-widest text-[#FBBF24] uppercase">
+            Create Employer Account
+          </span>
+          <h1 className="text-3xl font-bold tracking-tight text-white md:text-4xl">
+            Start hiring verified maritime crew today.
+          </h1>
+          <p className="max-w-md text-sm leading-relaxed text-slate-300">
+            Register your company, verify RPSL &amp; DG Shipping details, and activate the
+            yearly plan to post unlimited maritime jobs.
+          </p>
+        </div>
+
+        {/* Plan cards */}
+        <div className="relative z-10 space-y-4">
+          <div className="group rounded-2xl border border-white/5 bg-white/3 p-5 backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:border-white/10 hover:bg-white/6">
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm font-bold text-white">Yearly Plan</span>
+              <span className="text-lg font-bold text-[#FBBF24]">₹25,000<span className="text-xs font-medium text-slate-400"> / year</span></span>
             </div>
-          )}
-
-          {/* 2. Common Fields */}
-          <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700">
-              Email address
-            </label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-md border border-zinc-300 text-gray-800 px-3 py-2 text-sm focus:border-blue-950 focus:outline-none focus:ring-1 focus:ring-blue-950"
-              placeholder="recruiter@company.com"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700">
-              Password
-            </label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-md border border-zinc-300 px-3  text-gray-800 py-2 text-sm focus:border-blue-950 focus:outline-none focus:ring-1 focus:ring-blue-950"
-              placeholder="At least 6 characters"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700">
-              Confirm password
-            </label>
-            <input
-              type="password"
-              required
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full rounded-md border border-zinc-300   text-gray-800 px-3 py-2 text-sm focus:border-blue-950 focus:outline-none focus:ring-1 focus:ring-blue-950"
-              placeholder="••••••••"
-            />
+            <ul className="mt-3 space-y-1.5 text-xs text-slate-300">
+              {[
+                "Unlimited job postings",
+                "Applied CV access included",
+                "Complete hiring pipeline",
+                "Company profile listing",
+                "Basic analytics",
+              ].map((f) => (
+                <li key={f} className="flex items-center gap-2">
+                  <svg className="h-3.5 w-3.5 shrink-0 text-[#FBBF24]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  {f}
+                </li>
+              ))}
+            </ul>
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          <div className="group rounded-2xl border border-white/5 bg-white/3 p-5 backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:border-white/10 hover:bg-white/6">
+            <span className="text-sm font-bold text-white">Smart Sourcing</span>
+            <p className="mt-1.5 text-xs leading-relaxed text-slate-300">
+              Discover and unlock candidates from the Maritime Talent Database — a
+              pay-as-you-go add-on.
+            </p>
+          </div>
+        </div>
+      </div>
 
-          <button
-            type="submit"
-            className="w-full rounded-full bg-yellow-400 py-2.5 text-sm font-semibold text-blue-950 hover:bg-yellow-300"
-          >
-            Create {role === "employer" ? "employer" : "job seeker"} account
-          </button>
-        </form>
+      {/* RIGHT SECTION (Registration Form) */}
+      <div className="flex w-full flex-col items-center bg-white px-6 py-12 md:px-12 lg:w-3/5">
+        <div className="w-full max-w-2xl space-y-10">
+          <div className="space-y-2">
+            <span className="text-[11px] font-bold tracking-widest text-[#13294B] uppercase block">
+              Employer Registration
+            </span>
+            <h1 className="text-3xl font-extrabold tracking-tight text-[#0F172A]">
+              Create Employer Account
+            </h1>
+            <p className="text-sm text-slate-500">
+              Fill in your details below to set up your company&apos;s hiring workspace.
+            </p>
+          </div>
 
-        <p className="mt-6 text-center text-sm text-zinc-600">
-          Already have an account?{" "}
-          <Link
-            href={role === "seeker" ? "https://nznf4dcd-3000.inc1.devtunnels.ms/login" : "/login?role=employer"}
-            className="font-medium text-blue-900 hover:underline"
-          >
-            Sign in
-          </Link>
-        </p>
+          <form onSubmit={handleSubmit} className="space-y-10">
+            {/* Section 1: HR / Recruiter Details */}
+            <div className="space-y-5">
+              <SectionHeading
+                step={1}
+                title="HR / Recruiter Details"
+                description="Who will manage this employer account?"
+              />
+              <div className="grid gap-5 sm:grid-cols-2">
+                <Field label="Full Name" required>
+                  <input required value={fullName} onChange={(e) => setFullName(e.target.value)} className={inputClass} placeholder="Jane Doe" />
+                </Field>
+                <Field label="Designation">
+                  <input value={designation} onChange={(e) => setDesignation(e.target.value)} className={inputClass} placeholder="Senior Recruiter" />
+                </Field>
+                <Field label="Official Email" required>
+                  <input type="email" required value={officialEmail} onChange={(e) => setOfficialEmail(e.target.value)} className={inputClass} placeholder="hr@company.com" />
+                </Field>
+                <Field label="Mobile Number" required>
+                  <div className="flex gap-2">
+                    <span className="flex w-16 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-600">
+                      +91
+                    </span>
+                    <input required type="tel" value={mobileNumber} onChange={(e) => setMobileNumber(e.target.value)} className={inputClass} placeholder="98765 43210" />
+                  </div>
+                </Field>
+                <Field label="WhatsApp Number">
+                  <input type="tel" value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value)} className={inputClass} placeholder="98765 43210" />
+                </Field>
+                <div />
+                <Field label="Password" required>
+                  <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} placeholder="At least 6 characters" />
+                </Field>
+                <Field label="Confirm Password" required>
+                  <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className={inputClass} placeholder="••••••••" />
+                </Field>
+              </div>
+            </div>
+
+            {/* Section 2: Company Details */}
+            <div className="space-y-5 border-t border-slate-100 pt-8">
+              <SectionHeading
+                step={2}
+                title="Company Details"
+                description="Basic information about your organisation."
+              />
+              <div className="grid gap-5 sm:grid-cols-2">
+                <Field label="Company Name" required>
+                  <input required value={companyName} onChange={(e) => setCompanyName(e.target.value)} className={inputClass} placeholder="V.Ships Crew Management" />
+                </Field>
+                <Field label="Company Type" required>
+                  <select required value={companyType} onChange={(e) => setCompanyType(e.target.value)} className={inputClass}>
+                    <option value="">Select</option>
+                    {COMPANY_TYPES.map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Company Website">
+                  <input value={companyWebsite} onChange={(e) => setCompanyWebsite(e.target.value)} className={inputClass} placeholder="https://" />
+                </Field>
+                <Field label="Office Address">
+                  <input value={officeAddress} onChange={(e) => setOfficeAddress(e.target.value)} className={inputClass} placeholder="Office address" />
+                </Field>
+                <Field label="City">
+                  <input value={city} onChange={(e) => setCity(e.target.value)} className={inputClass} placeholder="City" />
+                </Field>
+                <Field label="State">
+                  <input value={state} onChange={(e) => setState(e.target.value)} className={inputClass} placeholder="State" />
+                </Field>
+                <Field label="Country">
+                  <input value={country} onChange={(e) => setCountry(e.target.value)} className={inputClass} placeholder="India" />
+                </Field>
+              </div>
+            </div>
+
+            {/* Section 3: Verification Details */}
+            <div className="space-y-5 border-t border-slate-100 pt-8">
+              <SectionHeading
+                step={3}
+                title="Verification Details"
+                description="Add RPSL / DG Shipping details for faster verification. Optional but recommended."
+              />
+              <div className="grid gap-5 sm:grid-cols-2">
+                <Field label="RPSL Number">
+                  <input value={rpslNumber} onChange={(e) => setRpslNumber(e.target.value)} className={inputClass} placeholder="RPSL/MUM/xxxx/xxx" />
+                </Field>
+                <Field label="RPSL Validity Date">
+                  <input type="date" value={rpslValidity} onChange={(e) => setRpslValidity(e.target.value)} className={inputClass} placeholder="dd/mm/yyyy" />
+                </Field>
+                <Field label="DG Shipping Details">
+                  <input value={dgShippingDetails} onChange={(e) => setDgShippingDetails(e.target.value)} className={inputClass} placeholder="DG Shipping registration details" />
+                </Field>
+                <Field label="Company Registration Number">
+                  <input value={companyRegNumber} onChange={(e) => setCompanyRegNumber(e.target.value)} className={inputClass} placeholder="Company registration number" />
+                </Field>
+                <Field label="GST Number (Optional)">
+                  <input value={gstNumber} onChange={(e) => setGstNumber(e.target.value)} className={inputClass} placeholder="GST number" />
+                </Field>
+              </div>
+              <p className="rounded-xl bg-slate-50 p-3 text-xs leading-relaxed text-slate-500 border border-slate-100">
+                Note: After creating your account you can submit RPSL certificate &amp;
+                company authorization letter for verification. Jobs go live after
+                verification.
+              </p>
+            </div>
+
+            {error && (
+              <div className="flex items-center gap-2 rounded-xl bg-red-50 p-3 text-xs font-medium text-red-600 border border-red-100">
+                <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              className="group relative flex w-full items-center justify-center gap-2 rounded-2xl bg-[#FBBF24] py-3.5 text-sm font-bold text-[#0F172A] shadow-lg shadow-amber-500/10 transition-all duration-300 hover:bg-[#FCD34D] hover:shadow-xl hover:shadow-amber-500/20 active:scale-[0.98]"
+            >
+              Create Employer Account
+              <span className="transition-transform duration-200 group-hover:translate-x-1">→</span>
+            </button>
+          </form>
+
+          <p className="text-center text-sm text-slate-500">
+            Already have an employer account?{" "}
+            <Link
+              href="/login"
+              className="font-semibold text-[#0F172A] underline underline-offset-4 hover:text-[#13294B]"
+            >
+              Sign in
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );

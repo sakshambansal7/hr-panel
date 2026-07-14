@@ -14,6 +14,8 @@ export const MOCK_ADMIN_EMAIL = "admin@merchantnavyjobs.example";
 export const MOCK_ADMIN_PASSWORD = "admin123";
 export const MOCK_SUPERADMIN_EMAIL = "superadmin@merchantnavyjobs.example";
 export const MOCK_SUPERADMIN_PASSWORD = "superadmin123";
+export const MOCK_EMPLOYER_EMAIL = "hr@vships.com";
+export const MOCK_EMPLOYER_PASSWORD = "Employer@123";
 
 export type User = {
   name: string;
@@ -72,12 +74,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: "admin",
       });
     }
+    
     if (!seeded.some((a) => a.role === "superadmin")) {
       seeded.push({
         name: "Super Admin",
         email: MOCK_SUPERADMIN_EMAIL,
         password: MOCK_SUPERADMIN_PASSWORD,
         role: "superadmin",
+      });
+    }
+    if (!seeded.some((a) => a.role === "employer" && a.email.toLowerCase() === MOCK_EMPLOYER_EMAIL)) {
+      seeded.push({
+        name: "V.Ships Crew Management",
+        email: MOCK_EMPLOYER_EMAIL,
+        password: MOCK_EMPLOYER_PASSWORD,
+        role: "employer",
       });
     }
     if (seeded.length !== accounts.length) {

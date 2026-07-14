@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import SignupForm from "./SignupForm";
 
 export const metadata: Metadata = {
-  title: "Create account | MerchantNavyJobs",
+  title: "Create Employer Account | MND Jobs",
 };
 
 export default function SignupPage() {
