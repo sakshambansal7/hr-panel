@@ -6,19 +6,55 @@ export type Job = {
   company: string;
   location: string;
   rank: string;
+  department?: string;
   vesselType: string;
   contractLength: string;
   salary: string;
   salaryMin: number;
+  salaryFrom?: number;
+  salaryTo?: number;
+  currency?: string;
+  salaryNegotiable?: boolean;
   minExperienceYears: number;
   type: "Full-time" | "Contract";
   category: JobCategory;
   postedAt: string;
+  joiningDate?: string;
   tags: string[];
   description: string;
   responsibilities: string[];
   requirements: string[];
+  overtimeDetails?: string;
+  contractTerms?: string;
+  itfApproved?: boolean;
+  rpslValid?: boolean;
 };
+
+export function rankCategory(rank: string): "Rating" | "Engineer" | "Deck Officer" {
+  const engineRanks = [
+    "Chief Engineer",
+    "Second Engineer",
+    "Third Engineer",
+    "Fourth Engineer",
+    "Electro-Technical Officer",
+    "Oiler",
+    "Fitter",
+    "Wiper",
+  ];
+  const deckOfficerRanks = [
+    "Master",
+    "Chief Officer",
+    "Second Officer",
+    "Third Officer",
+    "2nd Officer",
+    "3rd Officer",
+    "Deck Cadet",
+    "Cadet",
+  ];
+  if (engineRanks.includes(rank)) return "Engineer";
+  if (deckOfficerRanks.includes(rank)) return "Deck Officer";
+  return "Rating";
+}
 
 export const RANKS = [
   "Master",
@@ -34,6 +70,19 @@ export const RANKS = [
   "Able Seaman",
   "Ordinary Seaman",
   "Cadet",
+] as const;
+
+export const DEPARTMENTS = ["Deck", "Engine", "Catering", "Electrical"] as const;
+
+export const VESSEL_TYPES = [
+  "Container",
+  "Bulk Carrier",
+  "Tanker",
+  "LNG Carrier",
+  "LPG Carrier",
+  "Chemical Tanker",
+  "Offshore",
+  "Cruise Ship",
 ] as const;
 
 export const jobs: Job[] = [

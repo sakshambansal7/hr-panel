@@ -1,6 +1,7 @@
 import { jobs as baseJobs, type Job } from "./mock-data";
+import { MOCK_EMPLOYER_EMAIL } from "../context/auth-context";
 
-export type JobStatus = "pending" | "live" | "rejected";
+export type JobStatus = "draft" | "pending" | "live" | "paused" | "closed" | "rejected";
 
 export type StoredJob = Job & {
   status: JobStatus;
@@ -9,6 +10,8 @@ export type StoredJob = Job & {
 };
 
 const JOBS_KEY = "mnj_jobs";
+
+const VSHIPS = "V.Ships India";
 
 // Sample employer submissions awaiting verification, shown until the admin
 // panel's own localStorage state has been written for the first time.
@@ -108,6 +111,166 @@ const seedPendingJobs: StoredJob[] = [
   },
 ];
 
+function vshipsJob(overrides: Partial<StoredJob> & { id: string; title: string }): StoredJob {
+  return {
+    company: VSHIPS,
+    location: "Mumbai, India",
+    rank: "AB",
+    department: "Deck",
+    vesselType: "Container",
+    contractLength: "6 months",
+    salary: "$0 - $0",
+    salaryMin: 0,
+    salaryFrom: 0,
+    salaryTo: 0,
+    currency: "USD",
+    salaryNegotiable: false,
+    minExperienceYears: 0,
+    type: "Contract",
+    category: "Ship",
+    postedAt: "2026-07-13",
+    joiningDate: "TBD",
+    tags: [],
+    description: "",
+    responsibilities: [],
+    requirements: [],
+    itfApproved: false,
+    rpslValid: false,
+    status: "draft",
+    submittedByName: VSHIPS,
+    submittedByEmail: MOCK_EMPLOYER_EMAIL,
+    ...overrides,
+  };
+}
+
+// Demo employer's own job postings, seeded so Manage Jobs / Applications /
+// Analytics have real, internally-consistent data to show on first login.
+const seedEmployerJobs: StoredJob[] = [
+  vshipsJob({
+    id: "vs-1",
+    title: "AB required for Container",
+    rank: "AB",
+    department: "Deck",
+    vesselType: "Container",
+    status: "live",
+  }),
+  vshipsJob({
+    id: "vs-2",
+    title: "Oiler required for Bulk Carrier",
+    rank: "Oiler",
+    department: "Engine",
+    vesselType: "Bulk Carrier",
+    status: "paused",
+  }),
+  vshipsJob({
+    id: "vs-3",
+    title: "AB required for Tanker",
+    rank: "AB",
+    department: "Deck",
+    vesselType: "Tanker",
+    status: "draft",
+  }),
+  vshipsJob({
+    id: "vs-4",
+    title: "TEST 3rd Officer Container",
+    rank: "3rd Officer",
+    department: "Deck",
+    vesselType: "Container",
+    joiningDate: "2026-02-01",
+    salary: "$5,000 - $7,000",
+    salaryFrom: 5000,
+    salaryTo: 7000,
+    salaryMin: 5000,
+    status: "live",
+  }),
+  vshipsJob({
+    id: "vs-5",
+    title: "3rd Officer",
+    rank: "3rd Officer",
+    department: "Deck",
+    vesselType: "Tanker",
+    joiningDate: "2026-07-23",
+    salary: "$3,500 - $5,000",
+    salaryFrom: 3500,
+    salaryTo: 5000,
+    salaryMin: 3500,
+    postedAt: "2026-07-07",
+    status: "draft",
+  }),
+  vshipsJob({
+    id: "vs-6",
+    title: "Chief Engineer",
+    rank: "Chief Engineer",
+    department: "Engine",
+    vesselType: "Offshore",
+    joiningDate: "2026-07-16",
+    salary: "$10,500 - $14,500",
+    salaryFrom: 10500,
+    salaryTo: 14500,
+    salaryMin: 10500,
+    postedAt: "2026-07-07",
+    status: "draft",
+  }),
+  vshipsJob({
+    id: "vs-7",
+    title: "Deck Cadet",
+    rank: "Deck Cadet",
+    department: "Deck",
+    vesselType: "Tanker",
+    joiningDate: "2026-07-28",
+    salary: "$400 - $800",
+    salaryFrom: 400,
+    salaryTo: 800,
+    salaryMin: 400,
+    postedAt: "2026-07-07",
+    status: "draft",
+  }),
+  vshipsJob({
+    id: "vs-8",
+    title: "3rd Officer",
+    rank: "3rd Officer",
+    department: "Deck",
+    vesselType: "Bulk Carrier",
+    joiningDate: "2026-09-11",
+    salary: "$3,500 - $5,000",
+    salaryFrom: 3500,
+    salaryTo: 5000,
+    salaryMin: 3500,
+    postedAt: "2026-07-07",
+    status: "draft",
+  }),
+  vshipsJob({
+    id: "vs-9",
+    title: "Deck Cadet",
+    rank: "Deck Cadet",
+    department: "Deck",
+    vesselType: "Tanker",
+    joiningDate: "2026-09-10",
+    salary: "$400 - $800",
+    salaryFrom: 400,
+    salaryTo: 800,
+    salaryMin: 400,
+    postedAt: "2026-07-07",
+    status: "draft",
+  }),
+  vshipsJob({
+    id: "vs-10",
+    title: "Deck Cadet",
+    rank: "Deck Cadet",
+    department: "Deck",
+    vesselType: "Tanker",
+    joiningDate: "2026-08-03",
+    salary: "$400 - $800",
+    salaryFrom: 400,
+    salaryTo: 800,
+    salaryMin: 400,
+    postedAt: "2026-07-07",
+    status: "draft",
+  }),
+];
+
+const seedJobs: StoredJob[] = [...seedEmployerJobs, ...seedPendingJobs];
+
 function readJSON<T>(key: string, fallback: T): T {
   try {
     const raw = window.localStorage.getItem(key);
@@ -122,11 +285,15 @@ function writeJSON<T>(key: string, value: T) {
 }
 
 function getStoredJobs(): StoredJob[] {
-  return readJSON<StoredJob[]>(JOBS_KEY, seedPendingJobs);
+  return readJSON<StoredJob[]>(JOBS_KEY, seedJobs);
 }
 
 function saveStoredJobs(list: StoredJob[]) {
   writeJSON(JOBS_KEY, list);
+}
+
+function newId() {
+  return `job-${Date.now()}-${Math.round(Math.random() * 1000)}`;
 }
 
 // Jobs visible on the public website: the seeded catalog plus anything an
@@ -137,6 +304,10 @@ export function getLiveJobs(): Job[] {
 
 export function findJob(id: string): Job | undefined {
   return getLiveJobs().find((j) => j.id === id);
+}
+
+export function getJobById(id: string): StoredJob | undefined {
+  return getStoredJobs().find((j) => j.id === id);
 }
 
 // Employer-submitted jobs awaiting admin verification.
@@ -150,6 +321,8 @@ export function getJobsSubmittedBy(email: string): StoredJob[] {
   );
 }
 
+export const getEmployerJobs = getJobsSubmittedBy;
+
 // Employer posts a job -> enters the verification queue, not yet live.
 export function submitJobForReview(
   job: Omit<Job, "id" | "postedAt">,
@@ -158,7 +331,7 @@ export function submitJobForReview(
 ): StoredJob {
   const newJob: StoredJob = {
     ...job,
-    id: `job-${Date.now()}`,
+    id: newId(),
     postedAt: new Date().toISOString().slice(0, 10),
     status: "pending",
     submittedByName,
@@ -176,7 +349,7 @@ export function addVerifiedJob(
 ): StoredJob {
   const newJob: StoredJob = {
     ...job,
-    id: `job-${Date.now()}`,
+    id: newId(),
     postedAt: new Date().toISOString().slice(0, 10),
     status: "live",
     submittedByName: publishedByName,
@@ -184,6 +357,71 @@ export function addVerifiedJob(
   };
   saveStoredJobs([newJob, ...getStoredJobs()]);
   return newJob;
+}
+
+// Employer saves an in-progress posting without submitting it anywhere.
+export function saveJobDraft(
+  job: Omit<Job, "id" | "postedAt">,
+  submittedByName: string,
+  submittedByEmail: string
+): StoredJob {
+  const newJob: StoredJob = {
+    ...job,
+    id: newId(),
+    postedAt: new Date().toISOString().slice(0, 10),
+    status: "draft",
+    submittedByName,
+    submittedByEmail,
+  };
+  saveStoredJobs([newJob, ...getStoredJobs()]);
+  return newJob;
+}
+
+// Employer publishes a job: live immediately if the company is verified,
+// otherwise it enters the same pending-approval queue as submitJobForReview.
+export function publishEmployerJob(
+  job: Omit<Job, "id" | "postedAt">,
+  submittedByName: string,
+  submittedByEmail: string,
+  isVerified: boolean
+): StoredJob {
+  const newJob: StoredJob = {
+    ...job,
+    id: newId(),
+    postedAt: new Date().toISOString().slice(0, 10),
+    status: isVerified ? "live" : "pending",
+    submittedByName,
+    submittedByEmail,
+  };
+  saveStoredJobs([newJob, ...getStoredJobs()]);
+  return newJob;
+}
+
+// Employer publishes an existing draft.
+export function publishDraftJob(id: string, isVerified: boolean) {
+  saveStoredJobs(
+    getStoredJobs().map((j) =>
+      j.id === id ? { ...j, status: (isVerified ? "live" : "pending") as JobStatus } : j
+    )
+  );
+}
+
+export function pauseJob(id: string) {
+  saveStoredJobs(
+    getStoredJobs().map((j) => (j.id === id ? { ...j, status: "paused" as JobStatus } : j))
+  );
+}
+
+export function reopenJob(id: string) {
+  saveStoredJobs(
+    getStoredJobs().map((j) => (j.id === id ? { ...j, status: "live" as JobStatus } : j))
+  );
+}
+
+export function closeJob(id: string) {
+  saveStoredJobs(
+    getStoredJobs().map((j) => (j.id === id ? { ...j, status: "closed" as JobStatus } : j))
+  );
 }
 
 // Admin/superadmin verifies a pending employer submission -> goes live on the website.

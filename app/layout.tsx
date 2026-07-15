@@ -1,11 +1,16 @@
 import type { Metadata } from "next";
-import { Work_Sans } from "next/font/google";
+import { Work_Sans, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "./context/auth-context";
 
 
 const workSans = Work_Sans({
   variable: "--font-work-sans",
+  subsets: ["latin"],
+});
+
+const plusJakartaSans = Plus_Jakarta_Sans({
+  variable: "--font-plus-jakarta-sans",
   subsets: ["latin"],
 });
 
@@ -20,12 +25,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${workSans.variable} h-full antialiased`}>
+    <html
+      lang="en"
+      className={`${workSans.variable} ${plusJakartaSans.variable} h-full antialiased`}
+    >
       <body className="min-h-full flex flex-col">
         <AuthProvider>
-       
+
           {children}
-          
+
         </AuthProvider>
       </body>
     </html>

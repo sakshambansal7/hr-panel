@@ -22,7 +22,7 @@ export default function LoginForm() {
   // Keep state consistent for the platform's routing
   useEffect(() => {
     if (role === "seeker") {
-      window.location.href = "https://nznf4dcd-3000.inc1.devtunnels.ms/login";
+      window.location.href = "https://merchantnavyjobs.vercel.app/login";
     }
   }, [role]);
 
