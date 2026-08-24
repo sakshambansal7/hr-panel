@@ -11,15 +11,11 @@ import { useAuth } from "../../../context/auth-context";
 import { getCompanyProfile } from "../../../lib/company-profile-store";
 import api from "../../../lib/api"; 
 
-const CURRENCIES = ["USD", "INR", "EUR", "GBP", "SGD"];
-const DEPARTMENTS = ["Deck", "Engine", "Catering", "Electrical", "Shore"];
-const RANKS = [
-  "Master", "Chief Officer", "2nd Officer", "3rd Officer", "Deck Cadet",
-  "Chief Engineer", "2nd Engineer", "3rd Engineer", "4th Engineer", "Engine Cadet",
-  "ETO", "AB", "OS", "Oiler", "Wiper", "Chief Cook", "General Steward"
-];
+// 🚀 FALLBACKS (Just in case your database is completely empty on day 1)
+const FALLBACK_DEPARTMENTS = ["Deck", "Engine", "Catering", "Electrical", "Shore"];
+const FALLBACK_RANKS = ["Master", "Chief Officer", "Chief Engineer", "2nd Engineer", "AB", "Oiler"];
+const FALLBACK_VESSELS = ["Oil Tanker", "Chemical Tanker", "Bulk Carrier", "Container Ship", "OSV"];
 
-// Dynamic Ship and Vessel Types
 const SHIP_TYPES = [
   { label: "Mainfleet", value: "mainfleet" },
   { label: "Offshore", value: "offshore" },
@@ -27,15 +23,10 @@ const SHIP_TYPES = [
   { label: "Cruise", value: "cruise" },
 ];
 
-const MAINFLEET_VESSELS = [
-  "Oil Tanker", "Chemical Tanker", "Gas Carrier (LPG/LNG)", "Container Ship",
-  "Bulk Carrier", "General Cargo", "Ro-Ro Vessel", "Pure Car Carrier (PCC)",
-];
-
-const OFFSHORE_VESSELS = [
-  "Anchor Handling Tug Supply (AHTS)", "Platform Supply Vessel (PSV)", 
-  "Offshore Support Vessel (OSV)", "Crew Boat", "DP Vessel", "Dredger", "Tugboat"
-];
+function formatTitleCase(str: string | null | undefined): string {
+  if (!str) return "N/A";
+  return str.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode; }) {
   return (
@@ -65,26 +56,22 @@ export default function PostJobPage() {
   const { user } = useAuth();
   const router = useRouter();
 
+  // 🚀 DYNAMIC STATE (Populated from your Database Matrix)
+  const [dynamicDepartments, setDynamicDepartments] = useState<string[]>(FALLBACK_DEPARTMENTS);
+  const [dynamicVessels, setDynamicVessels] = useState<string[]>(FALLBACK_VESSELS);
+  const [dynamicRanks, setDynamicRanks] = useState<string[]>(FALLBACK_RANKS);
+
+  // Form State
   const [title, setTitle] = useState("");
-  const [rank, setRank] = useState<string>(RANKS[0]);
-  const [department, setDepartment] = useState<string>(DEPARTMENTS[0]);
-  
   const [shipType, setShipType] = useState<string>(SHIP_TYPES[0].value);
-  const [vesselType, setVesselType] = useState<string>(MAINFLEET_VESSELS[0]);
-  
+  const [rank, setRank] = useState<string>("");
+  const [department, setDepartment] = useState<string>("");
+  const [vesselType, setVesselType] = useState<string>("");
   const [contractLength, setContractLength] = useState("6 months");
-  const [joiningDate, setJoiningDate] = useState("");
-  const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
 
-  const [salaryFrom, setSalaryFrom] = useState("");
-  const [salaryTo, setSalaryTo] = useState("");
-  const [currency, setCurrency] = useState("USD");
-  const [salaryNegotiable, setSalaryNegotiable] = useState(false);
-  const [overtimeDetails, setOvertimeDetails] = useState("");
-  const [contractTerms, setContractTerms] = useState("");
-  const [itfApproved, setItfApproved] = useState(false);
-  const [rpslValid, setRpslValid] = useState(false);
+  const [itfApproved, setItfApproved] = useState(true);
+  const [rpslValid, setRpslValid] = useState(true);
 
   const [submitting, setSubmitting] = useState<"draft" | "publish" | null>(null);
   const [companyId, setCompanyId] = useState<number>(1);
@@ -94,36 +81,62 @@ export default function PostJobPage() {
     [user]
   );
 
-  const currencySymbol = currency === "USD" ? "$" : currency === "INR" ? "₹" : currency + " ";
+  // 🚀 FETCH DYNAMIC FILTERS FROM YOUR MATRIX ENDPOINT
+  useEffect(() => {
+    const fetchMatrix = async () => {
+      try {
+        // Tries standard mounting points based on your router file
+        let res;
+        try {
+          res = await api.get("/filters/matrix");
+        } catch {
+          res = await api.get("/matrix");
+        }
 
-  // Dynamically change Vessel options based on Ship Type selection
-  const currentVesselOptions = shipType === "mainfleet" ? MAINFLEET_VESSELS : OFFSHORE_VESSELS;
+        const data = res.data?.data || res.data;
+        
+        let deps = new Set<string>();
+        let vessels = new Set<string>();
+        let ranks = new Set<string>();
 
-  const handleShipTypeChange = (newShipType: string) => {
-    setShipType(newShipType);
-    if (newShipType === "mainfleet") setVesselType(MAINFLEET_VESSELS[0]);
-    else if (newShipType === "offshore") setVesselType(OFFSHORE_VESSELS[0]);
-    else if (newShipType === "shore") setVesselType("Shore Operations");
-    else setVesselType("Cruise Liner");
-  };
+        // Extracting data based on your specific SQL DISTINCT query shape
+        if (Array.isArray(data)) {
+          data.forEach((item: any) => {
+            if (item.department) deps.add(item.department);
+            if (item.vessel_type) vessels.add(item.vessel_type);
+            if (item.rank || item.job_rank) ranks.add(item.rank || item.job_rank);
+          });
+        }
 
+        if (deps.size > 0) setDynamicDepartments(Array.from(deps));
+        if (vessels.size > 0) setDynamicVessels(Array.from(vessels));
+        if (ranks.size > 0) setDynamicRanks(Array.from(ranks));
+
+        // Auto-select first options to prevent empty submissions
+        if (deps.size > 0) setDepartment(Array.from(deps)[0]);
+        if (vessels.size > 0) setVesselType(Array.from(vessels)[0]);
+        if (ranks.size > 0) setRank(Array.from(ranks)[0]);
+
+      } catch (err) {
+        console.error("Failed to fetch dynamic matrix", err);
+        // Fallbacks stay active if the DB fetch fails
+        setDepartment(FALLBACK_DEPARTMENTS[0]);
+        setVesselType(FALLBACK_VESSELS[0]);
+        setRank(FALLBACK_RANKS[0]);
+      }
+    };
+    fetchMatrix();
+  }, []);
+
+  // Fetch Company ID
   useEffect(() => {
     const fetchCompanyId = async () => {
       if (!user?.email) return;
       try {
         const res = await api.get("/companies/dropdown");
-        let comps = [];
-        const responseData = res.data;
-        
-        // Aggressive extraction
-        if (responseData && Array.isArray(responseData)) comps = responseData;
-        else if (responseData?.data && Array.isArray(responseData.data)) comps = responseData.data;
-        else if (responseData?.data?.data && Array.isArray(responseData.data.data)) comps = responseData.data.data;
-        
+        let comps = Array.isArray(res.data?.data?.data) ? res.data.data.data : Array.isArray(res.data?.data) ? res.data.data : res.data;
         const myComp = comps.find((c: any) => c.email?.toLowerCase() === user.email.toLowerCase());
-        if (myComp && myComp.id) {
-          setCompanyId(myComp.id);
-        }
+        if (myComp && myComp.id) setCompanyId(myComp.id);
       } catch (err) {
         console.error("Failed to fetch company ID", err);
       }
@@ -131,26 +144,31 @@ export default function PostJobPage() {
     fetchCompanyId();
   }, [user]);
 
+  // 🚀 CONDITIONAL LOGIC FLAGS
+  const showVesselType = shipType !== "shore" && shipType !== "cruise";
+  const showRank = shipType !== "shore";
+
+  // Compute final values for payload & preview based on conditional flags
+  const finalVesselType = showVesselType ? vesselType : "N/A";
+  const finalRank = showRank ? rank : "Shore Staff";
+
   function buildPayload(statusOverride?: string) {
     const specificsArray = [
       title ? `Title: ${title.trim()}` : "",
-      salaryFrom || salaryTo ? `Salary: ${currencySymbol}${salaryFrom}-${salaryTo} ${salaryNegotiable ? '(Negotiable)' : ''}` : "",
-      joiningDate ? `Joining: ${joiningDate}` : "",
-      location ? `Location: ${location.trim()}` : "",
-      overtimeDetails ? `OT: ${overtimeDetails.trim()}` : "",
-      contractTerms ? `Terms: ${contractTerms.trim()}` : ""
+      itfApproved ? "ITF Approved" : "",
+      rpslValid ? "RPSL Valid" : ""
     ].filter(Boolean);
 
     return {
       company_id: companyId, 
-      job_type: department.toLowerCase() === "shore" ? "shore" : "engineer",
-      rank: rank,
+      job_type: shipType === "shore" ? "shore" : "engineer",
+      rank: finalRank, // Injected conditionally
       department: department,
-      vessel_type: vesselType,
+      vessel_type: finalVesselType, // Injected conditionally
       ship_type: shipType, 
       contract: contractLength.trim() || "TBD",
-      requirement_description: description.trim() || "Standard rank experience required.",
-      position_specifics: specificsArray.join(" | ") || "Immediate joining.",
+      requirement_description: description.trim() || "Standard experience required.",
+      position_specifics: specificsArray.join(" | ") || "Standard terms.",
       status: statusOverride || (isVerified ? "active" : "pending")
     };
   }
@@ -206,35 +224,39 @@ export default function PostJobPage() {
 
               <div className="grid gap-5 sm:grid-cols-2">
                 <Field label="Ship Type" required>
-                  <select value={shipType} onChange={(e) => handleShipTypeChange(e.target.value)} className={inputClass}>
+                  <select value={shipType} onChange={(e) => setShipType(e.target.value)} className={inputClass}>
                     {SHIP_TYPES.map((st) => (
                       <option key={st.value} value={st.value}>{st.label}</option>
                     ))}
                   </select>
                 </Field>
-                <Field label="Vessel Type" required>
-                  {shipType === "shore" || shipType === "cruise" ? (
-                    <input type="text" value={vesselType} disabled className={`${inputClass} bg-slate-50 text-slate-500 font-bold`} />
-                  ) : (
+                
+                {/* 🚀 CONDITIONAL VESSEL TYPE */}
+                {showVesselType && (
+                  <Field label="Vessel Type" required>
                     <select value={vesselType} onChange={(e) => setVesselType(e.target.value)} className={inputClass}>
-                      {currentVesselOptions.map((v) => (
-                        <option key={v} value={v}>{v}</option>
+                      {dynamicVessels.map((v) => (
+                        <option key={v} value={v}>{formatTitleCase(v)}</option>
                       ))}
                     </select>
-                  )}
-                </Field>
+                  </Field>
+                )}
 
-                <Field label="Rank" required>
-                  <select value={rank} onChange={(e) => setRank(e.target.value)} className={inputClass}>
-                    {RANKS.map((r) => (
-                      <option key={r} value={r}>{r}</option>
-                    ))}
-                  </select>
-                </Field>
+                {/* 🚀 CONDITIONAL RANK */}
+                {showRank && (
+                  <Field label="Rank" required>
+                    <select value={rank} onChange={(e) => setRank(e.target.value)} className={inputClass}>
+                      {dynamicRanks.map((r) => (
+                        <option key={r} value={r}>{formatTitleCase(r)}</option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+
                 <Field label="Department" required>
                   <select value={department} onChange={(e) => setDepartment(e.target.value)} className={inputClass}>
-                    {DEPARTMENTS.map((d) => (
-                      <option key={d} value={d}>{d}</option>
+                    {dynamicDepartments.map((d) => (
+                      <option key={d} value={d}>{formatTitleCase(d)}</option>
                     ))}
                   </select>
                 </Field>
@@ -242,14 +264,7 @@ export default function PostJobPage() {
                 <Field label="Contract Length">
                   <input value={contractLength} onChange={(e) => setContractLength(e.target.value)} className={inputClass} placeholder="6 months" />
                 </Field>
-                <Field label="Joining Date">
-                  <input type="date" value={joiningDate} onChange={(e) => setJoiningDate(e.target.value)} className={inputClass} />
-                </Field>
               </div>
-
-              <Field label="Location">
-                <input value={location} onChange={(e) => setLocation(e.target.value)} className={inputClass} placeholder="Mumbai, India" />
-              </Field>
 
               <Field label="Job Description">
                 <textarea
@@ -262,37 +277,8 @@ export default function PostJobPage() {
               </Field>
             </SectionCard>
 
-            <SectionCard title="Salary & Terms">
-              <div className="grid gap-5 sm:grid-cols-3">
-                <Field label="Salary From">
-                  <input type="number" min={0} value={salaryFrom} onChange={(e) => setSalaryFrom(e.target.value)} className={inputClass} placeholder="0" />
-                </Field>
-                <Field label="Salary To">
-                  <input type="number" min={0} value={salaryTo} onChange={(e) => setSalaryTo(e.target.value)} className={inputClass} placeholder="0" />
-                </Field>
-                <Field label="Currency">
-                  <select value={currency} onChange={(e) => setCurrency(e.target.value)} className={inputClass}>
-                    {CURRENCIES.map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                </Field>
-              </div>
-
-              <div className="grid gap-5 sm:grid-cols-2">
-                <Field label="Overtime Details">
-                  <input value={overtimeDetails} onChange={(e) => setOvertimeDetails(e.target.value)} className={inputClass} placeholder="e.g. Fixed OT included" />
-                </Field>
-                <Field label="Contract Terms">
-                  <input value={contractTerms} onChange={(e) => setContractTerms(e.target.value)} className={inputClass} placeholder="e.g. As per CBA" />
-                </Field>
-              </div>
-
+            <SectionCard title="Compliance">
               <div className="flex flex-wrap gap-6 pt-1">
-                <label className="flex items-center gap-2 text-sm font-semibold text-slate-600 cursor-pointer">
-                  <input type="checkbox" checked={salaryNegotiable} onChange={(e) => setSalaryNegotiable(e.target.checked)} className="h-4 w-4 rounded border-[#E7EAF1] text-[#F5B61A] focus:ring-[#F5B61A] cursor-pointer" />
-                  Salary Negotiable
-                </label>
                 <label className="flex items-center gap-2 text-sm font-semibold text-slate-600 cursor-pointer">
                   <input type="checkbox" checked={itfApproved} onChange={(e) => setItfApproved(e.target.checked)} className="h-4 w-4 rounded border-[#E7EAF1] text-[#F5B61A] focus:ring-[#F5B61A] cursor-pointer" />
                   ITF Approved
@@ -319,18 +305,26 @@ export default function PostJobPage() {
 
               <div className="rounded-2xl border border-[#E7EAF1] bg-[#F8FAFC] p-4">
                 <p className="text-sm font-bold text-[#0F1E35]">
-                  {title || `${rank} required for ${vesselType}`}
+                  {title || `${formatTitleCase(finalRank)} required for ${formatTitleCase(finalVesselType)}`}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  {rank} · {department} · {vesselType}
+                  {formatTitleCase(finalRank)} · {formatTitleCase(department)} · {formatTitleCase(finalVesselType)}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  {contractLength || "TBD"} · Joining {joiningDate || "TBD"} · {location || "TBD"}
+                  Contract: {contractLength || "TBD"}
                 </p>
-                <p className="mt-2 text-sm font-bold text-[#0E8B61]">
-                  {currencySymbol}{salaryFrom || 0} - {currencySymbol}{salaryTo || 0}
-                  {salaryNegotiable && <span className="ml-1.5 text-xs font-medium text-slate-400">(Negotiable)</span>}
-                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {itfApproved && (
+                    <span className="rounded bg-blue-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-blue-600">
+                      ITF Approved
+                    </span>
+                  )}
+                  {rpslValid && (
+                    <span className="rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-600">
+                      RPSL Valid
+                    </span>
+                  )}
+                </div>
               </div>
 
               {!isVerified && (
