@@ -2,10 +2,10 @@
 
 "use client";
 
-import React, { useEffect, useState, useCallback, use } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { ArrowLeft, Mail, Phone, Calendar, Filter } from "lucide-react";
+import { useParams } from "next/navigation";
+import { ArrowLeft, Mail, Phone, Filter } from "lucide-react";
 import DashboardShell from "../../components/DashboardShell";
 import api from "../../../../lib/api";
 
@@ -24,102 +24,90 @@ function formatTitleCase(str: string | null | undefined): string {
   return str.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-export default function JobATSPage({ params }: { params: Promise<{ id: string }> }) {
-  // 🚀 Next.js App Router best practice for dynamic routes
-  const { id: jobId } = use(params);
-  const router = useRouter();
+function extractArray(resData: any): any[] {
+  if (!resData) return [];
+  if (Array.isArray(resData)) return resData;
+  if (resData.data && Array.isArray(resData.data)) return resData.data;
+  if (resData.data?.data && Array.isArray(resData.data.data)) return resData.data.data;
+  if (resData.items && Array.isArray(resData.items)) return resData.items;
+  if (resData.data?.items && Array.isArray(resData.data.items)) return resData.data.items;
+  return [];
+}
+
+export default function JobATSPage() {
+  // 🚀 FIXED: Use Next.js hook to safely grab the ID from the URL
+  const params = useParams();
+  const jobId = params?.id as string;
   
   const [job, setJob] = useState<any>(null);
   const [applications, setApplications] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("");
 
-  // 🚀 Bulletproof Fetch logic mapped to your HR Repository
   const fetchWorkspaceData = useCallback(async () => {
+    if (!jobId) return; // 🚀 Guard clause: Don't fetch if URL ID isn't ready
+
     setIsLoading(true);
+
     try {
-      // 1. Fetch ALL Jobs to find the specific one for the header
-      const jobsRes = await api.get("/jobs"); 
-      let jobsData = jobsRes.data;
-      
-      // Aggressive extraction
-      let extractedJobs = [];
-      if (Array.isArray(jobsData)) extractedJobs = jobsData;
-      else if (jobsData?.data && Array.isArray(jobsData.data)) extractedJobs = jobsData.data;
-      else if (jobsData?.data?.data && Array.isArray(jobsData.data.data)) extractedJobs = jobsData.data.data;
-      
-      const currentJob = extractedJobs.find((j: any) => String(j.job_id || j.id) === jobId);
-      setJob(currentJob || null);
-
-      // 2. Fetch Applications for this specific Job
-      // Assuming your route is /hr/applications. If it's just /applications, remove the /hr
-      const appRes = await api.get(`/hr/applications`, {
-        params: {
-          job_id: jobId,
-          status: statusFilter || undefined // Send filter directly to backend!
-        }
-      });
-      
-      let appsData = appRes.data;
-      let extractedApps = [];
-      
-      // Aggressive extraction
-      if (Array.isArray(appsData)) extractedApps = appsData;
-      else if (appsData?.data && Array.isArray(appsData.data)) extractedApps = appsData.data;
-      else if (appsData?.data?.data && Array.isArray(appsData.data.data)) extractedApps = appsData.data.data;
-
-      setApplications(extractedApps);
-
+      const jobsRes = await api.get("/jobs?limit=1000"); 
+      const jobsList = extractArray(jobsRes.data);
+      const currentJob = jobsList.find((j: any) => String(j.job_id || j.id) === String(jobId));
+      if (currentJob) setJob(currentJob);
     } catch (err) {
-      console.error("Failed to fetch ATS data", err);
-    } finally {
-      setIsLoading(false);
+      console.error("Failed to fetch job details", err);
     }
-  }, [jobId, statusFilter]); 
 
-  // Single clean trigger
+    try {
+      // 🚀 Now this will cleanly hit /hr/jobs/8417/applications
+      const appRes = await api.get(`/hr/jobs/${jobId}/applications`);
+      let fetchedApps = extractArray(appRes.data);
+
+      if (statusFilter) {
+        fetchedApps = fetchedApps.filter((app: any) => app.status?.toLowerCase() === statusFilter.toLowerCase());
+      }
+      
+      setApplications(fetchedApps);
+    } catch (err) {
+      console.error("Failed to fetch applications", err);
+    }
+
+    setIsLoading(false);
+  }, [jobId, statusFilter]);
+
   useEffect(() => {
     fetchWorkspaceData();
   }, [fetchWorkspaceData]);
 
-  // Handle Dropdown Status Change
   const handleStatusChange = async (applicationId: number, newStatus: string) => {
     try {
-      // Optimistic update so it feels instant
       setApplications(prev => prev.map(app => 
-        app.application_id === applicationId || app.id === applicationId 
+        (app.application_id === applicationId || app.id === applicationId) 
           ? { ...app, status: newStatus } 
           : app
       ));
-      
-      // Make sure this matches your Express route! 
       await api.patch(`/hr/applications/${applicationId}/status`, { status: newStatus });
     } catch (err: any) {
       alert("Failed to update candidate status.");
-      fetchWorkspaceData(); // refresh on fail
+      fetchWorkspaceData();
     }
   };
 
-  // Unpack job data for the header safely
   const jobStatus = job?.job_status?.toLowerCase() === "closed" ? "closed" : "active";
   const specs = job?.position_specifics || "";
   const titleMatch = specs.match(/Title:\s([^|]+)/);
-  const jobTitle = titleMatch ? titleMatch[1].trim() : formatTitleCase(job?.job_rank || job?.rank);
+  const jobRank = job?.job_rank || job?.rank || "Position";
+  const jobTitle = titleMatch ? titleMatch[1].trim() : formatTitleCase(jobRank);
+  
+  const totalApps = applications.length;
   const selectedCount = applications.filter(a => a.status === 'selected').length;
 
   return (
     <DashboardShell pageTitle={`ATS: ${jobTitle}`}>
-      
-      {/* HEADER & BACK BUTTON */}
       <div className="mb-6">
-        <button 
-          onClick={() => router.back()} 
-          className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-[#0F1E35] transition-colors mb-4 cursor-pointer"
-        >
+        <Link href="/employer/dashboard/jobs" className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-[#0F1E35] transition-colors mb-4">
           <ArrowLeft className="h-4 w-4" /> Back to Jobs
-        </button>
-        
-        {/* Job Header Card */}
+        </Link>
         <div className="rounded-[20px] border border-[#E7EAF1] bg-white p-6 shadow-sm flex flex-wrap items-center justify-between gap-6">
           <div>
             <div className="flex items-center gap-2 mb-2">
@@ -130,15 +118,14 @@ export default function JobATSPage({ params }: { params: Promise<{ id: string }>
                 Posted {job?.created_at ? new Date(job.created_at).toLocaleDateString() : 'N/A'}
               </span>
             </div>
-            <h1 className="text-2xl font-extrabold text-[#0F1E35]">{jobTitle || 'Loading...'}</h1>
+            <h1 className="text-2xl font-extrabold text-[#0F1E35]">{jobTitle}</h1>
             <p className="text-sm font-medium text-slate-500 mt-1">
               {formatTitleCase(job?.department)} · {formatTitleCase(job?.vessel_type)} · {formatTitleCase(job?.contract || '6 Months')}
             </p>
           </div>
-
           <div className="flex items-center gap-6">
             <div className="text-center">
-              <p className="text-2xl font-black text-[#0F1E35]">{applications.length}</p>
+              <p className="text-2xl font-black text-[#0F1E35]">{totalApps}</p>
               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Applicants</p>
             </div>
             <div className="text-center">
@@ -149,19 +136,15 @@ export default function JobATSPage({ params }: { params: Promise<{ id: string }>
         </div>
       </div>
 
-      {/* APPLICATIONS TABLE */}
       <div className="rounded-[20px] border border-[#E7EAF1] bg-white shadow-[0_1px_2px_rgba(15,30,53,0.04)] overflow-hidden">
-        
-        {/* Table Header & Filter Dropdown */}
         <div className="p-5 border-b border-[#E7EAF1] bg-slate-50/50 flex flex-wrap items-center justify-between gap-4">
            <h2 className="text-sm font-bold text-[#0F1E35]">Candidate Applications</h2>
-           
            <div className="flex items-center gap-2">
              <Filter className="h-4 w-4 text-slate-400" />
              <select 
                value={statusFilter}
                onChange={(e) => setStatusFilter(e.target.value)}
-               className="text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#F5B61A] focus:ring-2 focus:ring-[#F5B61A]/20 cursor-pointer"
+               className="text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#F5B61A]"
              >
                <option value="">All Statuses</option>
                {APPLICATION_STATUSES.map(s => (
@@ -172,9 +155,7 @@ export default function JobATSPage({ params }: { params: Promise<{ id: string }>
         </div>
         
         {isLoading ? (
-           <div className="p-12 text-center text-sm font-bold text-slate-400 animate-pulse">
-             Loading Candidates...
-           </div>
+           <div className="p-12 text-center text-sm font-bold text-slate-400 animate-pulse">Loading Candidates...</div>
         ) : applications.length === 0 ? (
           <div className="p-16 text-center text-sm font-medium text-slate-400">
             {statusFilter ? `No candidates found with status "${formatTitleCase(statusFilter)}".` : "No candidates have applied for this position yet."}
@@ -187,8 +168,7 @@ export default function JobATSPage({ params }: { params: Promise<{ id: string }>
                   <th className="px-6 py-4">Candidate</th>
                   <th className="px-6 py-4">Contact Details</th>
                   <th className="px-6 py-4">Applied Date</th>
-                  <th className="px-6 py-4">Pipeline Status</th>
-                  <th className="px-6 py-4 text-right">Action</th>
+                  <th className="px-6 py-4">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E7EAF1] bg-white">
@@ -196,21 +176,20 @@ export default function JobATSPage({ params }: { params: Promise<{ id: string }>
                   <tr key={app.application_id || app.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-4">
                       <p className="font-bold text-[#0F1E35]">{formatTitleCase(app.candidate_name)}</p>
-                      <p className="text-xs font-medium text-slate-500 mt-0.5">ID: #{app.candidate_id}</p>
+                      <Link href={`/employer/dashboard/candidates/${app.candidate_id || app.user_id}`} className="text-xs font-bold text-blue-600 hover:underline mt-0.5 inline-block">
+                        View Profile &rarr;
+                      </Link>
                     </td>
                     <td className="px-6 py-4 space-y-1.5">
                       <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
-                        <Mail className="h-3.5 w-3.5 text-slate-400" /> {app.candidate_email}
+                        <Mail className="h-3.5 w-3.5 text-slate-400" /> {app.candidate_email || app.email || "N/A"}
                       </div>
                       <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
-                        <Phone className="h-3.5 w-3.5 text-slate-400" /> {app.phone_number || "Not provided"}
+                        <Phone className="h-3.5 w-3.5 text-slate-400" /> {app.phone_number || "N/A"}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
-                        <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                        {new Date(app.created_at).toLocaleDateString()}
-                      </div>
+                    <td className="px-6 py-4 text-xs font-medium text-slate-600">
+                      {new Date(app.applied_at || app.created_at).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4">
                       <select 
@@ -222,14 +201,6 @@ export default function JobATSPage({ params }: { params: Promise<{ id: string }>
                           <option key={s} value={s} className="bg-white text-slate-800">{formatTitleCase(s)}</option>
                         ))}
                       </select>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <Link 
-                        href={`/employer/dashboard/candidates/${app.candidate_id}`}
-                        className="inline-block rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-[#0F1E35] hover:bg-slate-50 transition-colors shadow-sm"
-                      >
-                        View Full CV &rarr;
-                      </Link>
                     </td>
                   </tr>
                 ))}
