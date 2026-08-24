@@ -2,8 +2,8 @@ import axios from "axios";
 
 // 1. Create the Axios instance
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
-  withCredentials: true, // Crucial for sending the Refresh Cookie
+  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1',
+  // 🚀 REMOVED: withCredentials: true (We are not using cookies anymore)
   headers: {
     Accept: "application/json",
     "Content-Type": "application/json",
@@ -42,6 +42,18 @@ export function setAuthToken(token: string | null) {
   }
 }
 
+// 🚀 Request Interceptor: Always grab the freshest token right before the request leaves
+api.interceptors.request.use(
+  (config) => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    if (token && config.headers) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 // 4. Variables to handle multiple requests failing at the exact same time
 let isRefreshing = false;
 let failedQueue: Array<{ resolve: (val?: unknown) => void; reject: (err?: unknown) => void }> = [];
@@ -76,15 +88,21 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        // STRIPPING HEADERS: Force Authorization to undefined
-        // so the backend validates the HTTPOnly Refresh Cookie instead of the dead access token.
+        // 🚀 ONLY DECODE THE TOKEN TO GET THE ID
+        const oldToken = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+        if (!oldToken) throw new Error("No token found to decode");
+
+        const decoded = decodeJWT(oldToken);
+        const userId = decoded?.sub;
+
+        if (!userId) throw new Error("User ID (sub) is missing from the token payload");
+
+        console.log("🔄 HR access token expired. Attempting silent refresh...");
+
+        // 🚀 Fire the refresh request sending the userId in the body
         const refreshResponse = await axios.post(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/refresh`,
-          {},
-          { 
-            withCredentials: true,
-            headers: { Authorization: undefined } 
-          } 
+          `${api.defaults.baseURL}/auth/refresh`,
+          { userId: userId }
         );
 
         const newAccessToken = refreshResponse.data?.data?.accessToken || refreshResponse.data?.accessToken;
@@ -98,12 +116,15 @@ api.interceptors.response.use(
         }
       } catch (refreshError) {
         // 💥 IF REFRESH FAILS, LOG THE EMPLOYER OUT AND REDIRECT TO LOGIN
+        console.error("❌ Refresh failed. Session expired. Forcing logout.");
+        
         processQueue(refreshError, null);
         setAuthToken(null);
 
         if (typeof window !== "undefined") {
           // Clear all possible local storage keys to ensure a clean slate
           localStorage.removeItem("accessToken");
+          localStorage.removeItem("user");
           localStorage.removeItem("mnj_token");
           localStorage.removeItem("mnj_session");
           
