@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BadgeCheck, Check, Save } from "lucide-react";
 import DashboardShell from "../components/DashboardShell";
@@ -8,7 +8,6 @@ import { useAuth } from "../../../context/auth-context";
 import {
   getCompanyProfile,
   saveCompanyProfile,
-  EMPTY_COMPANY_PROFILE,
   type CompanyProfile,
 } from "../../../lib/company-profile-store";
 import { VESSEL_TYPES } from "../../../lib/mock-data";
@@ -36,13 +35,16 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 export default function CompanyProfileClient() {
   const { user } = useAuth();
-  const [profile, setProfile] = useState<CompanyProfile>(EMPTY_COMPANY_PROFILE);
-  const [saved, setSaved] = useState(false);
+  return (
+    <DashboardShell pageTitle="Company Profile">
+      {user && <CompanyProfileForm key={user.email} email={user.email} />}
+    </DashboardShell>
+  );
+}
 
-  useEffect(() => {
-    if (!user) return;
-    setProfile(getCompanyProfile(user.email));
-  }, [user]);
+function CompanyProfileForm({ email }: { email: string }) {
+  const [profile, setProfile] = useState<CompanyProfile>(() => getCompanyProfile(email));
+  const [saved, setSaved] = useState(false);
 
   function update<K extends keyof CompanyProfile>(key: K, value: CompanyProfile[K]) {
     setProfile((p) => ({ ...p, [key]: value }));
@@ -61,14 +63,12 @@ export default function CompanyProfileClient() {
 
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    if (!user) return;
-    saveCompanyProfile(user.email, profile);
+    saveCompanyProfile(email, profile);
     setSaved(true);
   }
 
   return (
-    <DashboardShell pageTitle="Company Profile">
-      <form onSubmit={handleSave} className="space-y-6">
+    <form onSubmit={handleSave} className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-extrabold tracking-tight text-[#0F1E35] sm:text-3xl">
@@ -276,6 +276,5 @@ export default function CompanyProfileClient() {
           </div>
         </div>
       </form>
-    </DashboardShell>
   );
 }

@@ -1,3 +1,6 @@
+// app/context/auth-context.tsx
+
+
 "use client";
 
 import {
@@ -7,169 +10,146 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import api, { setAuthToken } from "../lib/api";
 
-export type Role = "seeker" | "employer" | "admin" | "superadmin";
+// --- NATIVE JWT DECODER ---
+function decodeJWT(token: string) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      window.atob(base64).split('').map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch (error) {
+    return null;
+  }
+}
 
-export const MOCK_ADMIN_EMAIL = "admin@merchantnavyjobs.example";
-export const MOCK_ADMIN_PASSWORD = "admin123";
-export const MOCK_SUPERADMIN_EMAIL = "superadmin@merchantnavyjobs.example";
-export const MOCK_SUPERADMIN_PASSWORD = "superadmin123";
-export const MOCK_EMPLOYER_EMAIL = "hr@vships.com";
-export const MOCK_EMPLOYER_PASSWORD = "Employer@123";
+export type Role = "candidate" | "employer" | "admin" | "editor" | "superadmin";
 
 export type User = {
   name: string;
   email: string;
   role: Role;
+  lastLoginAt?: string;
 };
 
-type StoredAccount = User & { password: string };
+export type ApiUser = {
+  id?: number | string;
+  name: string;
+  email: string;
+  role: string;
+};
 
-type AuthResult = { ok: true } | { ok: false; error: string };
+// Maps the roles the real backend uses onto this app's internal Role type
+function mapApiRole(role: string): Role {
+  const r = String(role || "").toLowerCase();
+  if (r === "recruiter" || r === "employer" || r === "hr") return "employer";
+  if (r === "candidate" || r === "seafarer") return "candidate";
+  if (r === "super-admin" || r === "superadmin" || r.includes("super")) return "superadmin";
+  if (r === "admin") return "admin";
+  return "employer"; // Default for HR Panel
+}
 
 type AuthContextValue = {
   user: User | null;
   ready: boolean;
-  login: (email: string, password: string, role: Role) => AuthResult;
-  loginStaff: (email: string, password: string) => AuthResult;
-  signup: (
-    name: string,
-    email: string,
-    password: string,
-    role: Role
-  ) => AuthResult;
+  setSessionUser: (apiUser: ApiUser, token?: string) => void;
   logout: () => void;
 };
 
-const ACCOUNTS_KEY = "mnj_accounts";
 const SESSION_KEY = "mnj_session";
+const TOKEN_KEY = "accessToken";
 
 const AuthContext = createContext<AuthContextValue | null>(null);
-
-function readAccounts(): StoredAccount[] {
-  try {
-    const raw = window.localStorage.getItem(ACCOUNTS_KEY);
-    return raw ? (JSON.parse(raw) as StoredAccount[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeAccounts(accounts: StoredAccount[]) {
-  window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
-}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
 
+  // 🌍 RESTORE SESSION ON LOAD
   useEffect(() => {
-    const accounts = readAccounts();
-    const seeded: StoredAccount[] = [...accounts];
-    if (!seeded.some((a) => a.role === "admin")) {
-      seeded.push({
-        name: "Site Admin",
-        email: MOCK_ADMIN_EMAIL,
-        password: MOCK_ADMIN_PASSWORD,
-        role: "admin",
-      });
+    try {
+      const token = window.localStorage.getItem(TOKEN_KEY);
+      const rawSession = window.localStorage.getItem(SESSION_KEY);
+
+      if (token) {
+        setAuthToken(token); // Inject into Axios instantly
+        const decoded = decodeJWT(token);
+        
+        if (rawSession) {
+          const parsedUser = JSON.parse(rawSession) as User;
+          if (decoded && decoded.role) {
+            parsedUser.role = mapApiRole(decoded.role);
+          }
+          setUser(parsedUser);
+        } else if (decoded) {
+          // Fallback if session storage was wiped but token still exists
+          const recoveredUser: User = {
+            name: decoded.name || decoded.email || "Employer",
+            email: decoded.email || "",
+            role: mapApiRole(decoded.role),
+          };
+          setUser(recoveredUser);
+          window.localStorage.setItem(SESSION_KEY, JSON.stringify(recoveredUser));
+        }
+      }
+    } catch (e) {
+      console.error("Failed to restore session from token", e);
     }
     
-    if (!seeded.some((a) => a.role === "superadmin")) {
-      seeded.push({
-        name: "Super Admin",
-        email: MOCK_SUPERADMIN_EMAIL,
-        password: MOCK_SUPERADMIN_PASSWORD,
-        role: "superadmin",
-      });
-    }
-    if (!seeded.some((a) => a.role === "employer" && a.email.toLowerCase() === MOCK_EMPLOYER_EMAIL)) {
-      seeded.push({
-        name: "V.Ships Crew Management",
-        email: MOCK_EMPLOYER_EMAIL,
-        password: MOCK_EMPLOYER_PASSWORD,
-        role: "employer",
-      });
-    }
-    if (seeded.length !== accounts.length) {
-      writeAccounts(seeded);
-    }
-
-    try {
-      const raw = window.localStorage.getItem(SESSION_KEY);
-      if (raw) setUser(JSON.parse(raw) as User);
-    } catch {
-      // ignore corrupt session data
-    }
     setReady(true);
   }, []);
 
-  function login(email: string, password: string, role: Role): AuthResult {
-    const accounts = readAccounts();
-    const account = accounts.find(
-      (a) => a.email.toLowerCase() === email.toLowerCase() && a.role === role
-    );
-    if (!account || account.password !== password) {
-      return { ok: false, error: "Invalid email or password." };
+  // 🚀 REAL PRODUCTION SESSION HANDLER
+  function setSessionUser(apiUser: ApiUser, token?: string) {
+    let finalRole = mapApiRole(apiUser.role || "hr");
+
+    if (token) {
+      const decoded = decodeJWT(token);
+      if (decoded && decoded.role) {
+        finalRole = mapApiRole(decoded.role);
+      }
     }
+
+    const lastLoginAt = new Date().toISOString();
+    
     const session: User = {
-      name: account.name,
-      email: account.email,
-      role: account.role,
+      // Fallback to email if name isn't provided by backend yet
+      name: apiUser.name || apiUser.email, 
+      email: apiUser.email,
+      role: finalRole, 
+      lastLoginAt,
     };
+    
     window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    setUser(session);
-    return { ok: true };
-  }
-
-  function loginStaff(email: string, password: string): AuthResult {
-    const accounts = readAccounts();
-    const account = accounts.find(
-      (a) =>
-        a.email.toLowerCase() === email.toLowerCase() &&
-        (a.role === "admin" || a.role === "superadmin")
-    );
-    if (!account || account.password !== password) {
-      return { ok: false, error: "Invalid email or password." };
+    
+    if (token) {
+      window.localStorage.setItem(TOKEN_KEY, token);
+      setAuthToken(token); // Inject into Axios for future requests
     }
-    const session: User = {
-      name: account.name,
-      email: account.email,
-      role: account.role,
-    };
-    window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    
     setUser(session);
-    return { ok: true };
   }
 
-  function signup(
-    name: string,
-    email: string,
-    password: string,
-    role: Role
-  ): AuthResult {
-    const accounts = readAccounts();
-    const exists = accounts.some(
-      (a) => a.email.toLowerCase() === email.toLowerCase() && a.role === role
-    );
-    if (exists) {
-      return { ok: false, error: "An account with this email already exists." };
+  // 🚀 REAL PRODUCTION LOGOUT HANDLER
+  async function logout() {
+    try {
+      await api.post("/auth/logout"); 
+    } catch (err) {
+      console.error("Backend logout failed", err);
     }
-    const account: StoredAccount = { name, email, password, role };
-    writeAccounts([...accounts, account]);
-    const session: User = { name, email, role };
-    window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    setUser(session);
-    return { ok: true };
-  }
 
-  function logout() {
     window.localStorage.removeItem(SESSION_KEY);
+    window.localStorage.removeItem(TOKEN_KEY);
+    setAuthToken(null);
     setUser(null);
+    window.location.href = "/login"; // Force redirect to clear memory
   }
 
   return (
-    <AuthContext.Provider value={{ user, ready, login, loginStaff, signup, logout }}>
+    <AuthContext.Provider value={{ user, ready, setSessionUser, logout }}>
       {children}
     </AuthContext.Provider>
   );

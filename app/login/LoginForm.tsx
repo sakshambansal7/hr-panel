@@ -3,43 +3,65 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
-import { useAuth } from "../context/auth-context";
-import type { Role } from "../context/auth-context";
+import api from "../lib/api"; 
+import { useAuth } from "../context/auth-context"; // 🚀 Imported useAuth
 
 export default function LoginForm() {
   const searchParams = useSearchParams();
-  const initialRole = searchParams.get("role") === "employer" ? "employer" : "employer";
+  const initialRole = searchParams.get("role") === "seeker" ? "seeker" : "employer";
 
-  const { login } = useAuth();
   const router = useRouter();
+  // 🚀 Destructured setSessionUser from your context
+  const { setSessionUser } = useAuth(); 
 
-  const [role, setRole] = useState<Role>(initialRole);
+  const [role, setRole] = useState<"employer" | "seeker">(initialRole);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Keep state consistent for the platform's routing
   useEffect(() => {
     if (role === "seeker") {
-      window.location.href = "https://merchantnavyjobs.vercel.app/login";
+      window.location.href = "http://localhost:3001/login"; 
     }
   }, [role]);
 
-  function handleSubmit(e: React.FormEvent) {
+  // 🚀 FIXED: Added <HTMLFormElement> to resolve the TypeScript deprecation warning
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
+    setIsLoading(true);
     
-    const result = login(email, password, role);
-    if (!result.ok) {
-      setError(result.error);
-      return;
+    try {
+      const response = await api.post("/auth/login", {
+        email: email.trim(),
+        password,
+        role: "hr" 
+      });
+
+      if (response.data?.success || response.status === 200) {
+        const token = response.data?.data?.accessToken || response.data?.accessToken;
+        
+        // Ensure we have a fallback user object if the backend doesn't send one explicitly
+        const userData = response.data?.data?.user || response.data?.user || { name: email, email: email, role: "employer" };
+        
+        if (token) {
+          // 🚀 FIXED: Set the user in live React context so the dashboard doesn't kick us out!
+          setSessionUser(userData, token);
+        }
+        
+        const next = searchParams.get("next");
+        // 🚀 FIXED: Smooth client-side routing instead of a hard reload
+        router.push(next || "/employer/dashboard");
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Invalid credentials. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
-    const next = searchParams.get("next");
-    router.push(next || "/employer/dashboard");
   }
 
-  // Pre-fill demo credentials
   const fillDemoCredentials = () => {
     setEmail("hr@vships.com");
     setPassword("Employer@123");
@@ -48,17 +70,14 @@ export default function LoginForm() {
   return (
     <div className="flex min-h-screen w-full flex-col lg:flex-row bg-[#F8FAFC] font-sans antialiased selection:bg-[#FBBF24]/30">
       
-      {/* LEFT SECTION (Branding, Hero & Stats) */}
-      <div className="relative flex w-full flex-col justify-between overflow-hidden bg-linear-to-br from-[#0F172A] to-[#13294B] p-8 md:p-12 lg:w-1/2">
-        {/* Subtle radial lighting aura overlay */}
+      {/* LEFT SECTION */}
+      <div className="relative flex w-full flex-col justify-between overflow-hidden bg-gradient-to-br from-[#0F172A] to-[#13294B] p-8 md:p-12 lg:w-1/2">
         <div className="absolute -left-1/4 -top-1/4 h-[80%] w-[80%] rounded-full bg-blue-500/10 blur-[120px] pointer-events-none" />
         <div className="absolute -bottom-1/4 -right-1/4 h-[80%] w-[80%] rounded-full bg-amber-500/5 blur-[120px] pointer-events-none" />
 
-        {/* Top Branding Bar */}
         <div className="relative z-10 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-tr from-[#FBBF24] to-[#FCD34D] shadow-md shadow-[#FBBF24]/20">
-              {/* Anchor / Maritime Minimal Logo */}
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-[#FBBF24] to-[#FCD34D] shadow-md shadow-[#FBBF24]/20">
               <svg className="h-5 w-5 text-[#0F172A]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v14m0 0l-3-3m3 3l3-3M4 14a8 8 0 0016 0" />
               </svg>
@@ -70,20 +89,17 @@ export default function LoginForm() {
           </div>
         </div>
 
-        {/* Hero Artwork Area - Fades smoothly into the navy background */}
         <div className="relative my-auto flex h-85 w-full items-center justify-center overflow-hidden rounded-2xl border border-white/5 bg-slate-950/20 md:h-100">
-          {/* Fading Gradients on Image edges */}
-          <div className="absolute inset-0 z-10 bg-linear-to-t from-[#0F172A] via-transparent to-[#0F172A]/50" />
-          <div className="absolute inset-0 z-10 bg-linear-to-r from-[#0F172A]/80 via-transparent to-[#0F172A]/80" />
+          <div className="absolute inset-0 z-10 bg-gradient-to-t from-[#0F172A] via-transparent to-[#0F172A]/50" />
+          <div className="absolute inset-0 z-10 bg-gradient-to-r from-[#0F172A]/80 via-transparent to-[#0F172A]/80" />
           
           <img 
             src="https://encrypted-tbn1.gstatic.com/licensed-image?q=tbn:ANd9GcRZWuZQdgwkENAA6UKzqs74YUnMnphBs5viXFjXwIAG2PmJdqnkzO2hLVfGbwMAdJj1fUxdWk9VNtKU_Ho" 
-            alt="Modern cargo ship sailing during dusk representing worldwide maritime recruitment pipelines" 
+            alt="Modern cargo ship sailing during dusk" 
             className="h-full w-full object-cover opacity-65 mix-blend-luminosity scale-105 transform transition duration-1000 hover:scale-100"
           />
         </div>
 
-        {/* Bottom Hero Text & Translucent Stat Cards */}
         <div className="relative z-10 space-y-6">
           <div className="space-y-2">
             <span className="text-xs font-bold tracking-widest text-[#FBBF24] uppercase">
@@ -97,7 +113,6 @@ export default function LoginForm() {
             </p>
           </div>
 
-          {/* Premium Glassmorphic Stats */}
           <div className="grid grid-cols-3 gap-3">
             <div className="group rounded-2xl border border-white/5 bg-white/3 p-4 backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:border-white/10 hover:bg-white/6 hover:shadow-lg hover:shadow-amber-500/2">
               <span className="block text-xl font-bold text-[#FBBF24] md:text-2xl">25k+</span>
@@ -117,11 +132,10 @@ export default function LoginForm() {
         </div>
       </div>
 
-      {/* RIGHT SECTION (Clean SaaS Login Form) */}
+      {/* RIGHT SECTION */}
       <div className="flex w-full items-center justify-center bg-white px-6 py-12 md:px-12 lg:w-1/2">
         <div className="w-full max-w-md space-y-8">
           
-          {/* Header */}
           <div className="space-y-2">
             <span className="text-[11px] font-bold tracking-widest text-[#13294B] uppercase block">
               Employer Login
@@ -134,7 +148,6 @@ export default function LoginForm() {
             </p>
           </div>
 
-          {/* Native Toggle switcher for rapid platform roles */}
           <div className="flex rounded-xl bg-slate-100 p-1 border border-slate-200/60">
             <button
               type="button"
@@ -152,7 +165,6 @@ export default function LoginForm() {
             </button>
           </div>
 
-          {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-700 tracking-wide uppercase">
@@ -228,14 +240,14 @@ export default function LoginForm() {
 
             <button
               type="submit"
-              className="group relative flex w-full items-center justify-center gap-2 rounded-2xl bg-[#FBBF24] py-3.5 text-sm font-bold text-[#0F172A] shadow-lg shadow-amber-500/10 transition-all duration-300 hover:bg-[#FCD34D] hover:shadow-xl hover:shadow-amber-500/20 active:scale-[0.98]"
+              disabled={isLoading}
+              className="group relative flex w-full items-center justify-center gap-2 rounded-2xl bg-[#FBBF24] py-3.5 text-sm font-bold text-[#0F172A] shadow-lg shadow-amber-500/10 transition-all duration-300 hover:bg-[#FCD34D] hover:shadow-xl hover:shadow-amber-500/20 active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              Sign In as Company
-              <span className="transition-transform duration-200 group-hover:translate-x-1">→</span>
+              {isLoading ? "Signing In..." : "Sign In as Company"}
+              {!isLoading && <span className="transition-transform duration-200 group-hover:translate-x-1">→</span>}
             </button>
           </form>
 
-          {/* Signup Switcher */}
           <p className="text-center text-sm text-slate-500">
             New employer?{" "}
             <Link
@@ -246,7 +258,6 @@ export default function LoginForm() {
             </Link>
           </p>
 
-          {/* Elegant Demo Credentials Box */}
           <div 
             onClick={fillDemoCredentials}
             className="group relative cursor-pointer overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-50 p-4 transition-all duration-300 hover:border-[#FBBF24]/50 hover:bg-[#FBBF24]/5"
@@ -267,7 +278,6 @@ export default function LoginForm() {
 
         </div>
       </div>
-
     </div>
   );
 }

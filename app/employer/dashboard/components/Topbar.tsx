@@ -5,6 +5,21 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Menu, Zap, Bell, CircleHelp, LogOut, ChevronDown } from "lucide-react";
 import { useState } from "react";
 
+const NOTIFICATIONS = [
+  "New application received.",
+  "ETO Candidate accepted interview.",
+  "Subscription renewed.",
+  "3 profiles matched.",
+  "Company verification approved.",
+];
+
+const HELP_TIPS = [
+  "Post a job from Manage Jobs → Post New Job.",
+  "Jobs go live immediately once your company is verified; otherwise they're saved as Pending Approval.",
+  "Use Smart Sourcing credits to unlock candidates who haven't applied to your jobs.",
+  "Move applicants through the pipeline from a job's View Applications screen.",
+];
+
 type TopbarProps = {
   pageTitle: string;
   displayName: string;
@@ -15,7 +30,15 @@ type TopbarProps = {
 
 export default function Topbar({ pageTitle, displayName, credits, onMenuClick, onLogout }: TopbarProps) {
   const [profileOpen, setProfileOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const initial = displayName.trim().charAt(0).toUpperCase() || "U";
+
+  function toggle(panel: "profile" | "notifications" | "help") {
+    setProfileOpen(panel === "profile" ? (v) => !v : false);
+    setNotificationsOpen(panel === "notifications" ? (v) => !v : false);
+    setHelpOpen(panel === "help" ? (v) => !v : false);
+  }
 
   return (
     <header className="sticky top-0 z-20 flex h-[70px] items-center justify-between border-b border-[#E7EAF1] bg-white/90 px-4 backdrop-blur-md sm:px-6">
@@ -36,22 +59,79 @@ export default function Topbar({ pageTitle, displayName, credits, onMenuClick, o
           {credits} Credits
         </span>
 
-        <button
-          type="button"
-          className="relative flex h-10 w-10 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-slate-100"
-          title="Notifications"
-        >
-          <Bell className="h-[18px] w-[18px]" strokeWidth={2} />
-          <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-[#F5B61A]" />
-        </button>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => toggle("notifications")}
+            className="relative flex h-10 w-10 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-slate-100"
+            title="Notifications"
+          >
+            <Bell className="h-[18px] w-[18px]" strokeWidth={2} />
+            <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-[#F5B61A]" />
+          </button>
+          <AnimatePresence>
+            {notificationsOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setNotificationsOpen(false)} />
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 8 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute right-0 top-[calc(100%+8px)] z-40 w-72 overflow-hidden rounded-2xl border border-[#E7EAF1] bg-white shadow-lg"
+                >
+                  <div className="border-b border-[#E7EAF1] px-4 py-3">
+                    <p className="text-sm font-bold text-[#0F1E35]">Notifications</p>
+                  </div>
+                  <ul className="max-h-72 overflow-y-auto py-1">
+                    {NOTIFICATIONS.map((n) => (
+                      <li key={n} className="flex items-start gap-2.5 px-4 py-2.5 text-xs text-slate-600">
+                        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#F5B61A]" />
+                        {n}
+                      </li>
+                    ))}
+                  </ul>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+        </div>
 
-        <button
-          type="button"
-          className="hidden h-10 w-10 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-slate-100 sm:flex"
-          title="Help"
-        >
-          <CircleHelp className="h-[18px] w-[18px]" strokeWidth={2} />
-        </button>
+        <div className="relative hidden sm:block">
+          <button
+            type="button"
+            onClick={() => toggle("help")}
+            className="flex h-10 w-10 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-slate-100"
+            title="Help"
+          >
+            <CircleHelp className="h-[18px] w-[18px]" strokeWidth={2} />
+          </button>
+          <AnimatePresence>
+            {helpOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setHelpOpen(false)} />
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 8 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute right-0 top-[calc(100%+8px)] z-40 w-80 overflow-hidden rounded-2xl border border-[#E7EAF1] bg-white shadow-lg"
+                >
+                  <div className="border-b border-[#E7EAF1] px-4 py-3">
+                    <p className="text-sm font-bold text-[#0F1E35]">Quick Help</p>
+                  </div>
+                  <ul className="space-y-2.5 px-4 py-3">
+                    {HELP_TIPS.map((tip) => (
+                      <li key={tip} className="text-xs leading-relaxed text-slate-600">
+                        {tip}
+                      </li>
+                    ))}
+                  </ul>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+        </div>
 
         <Link
           href="/employer/dashboard/post-job"
@@ -63,7 +143,7 @@ export default function Topbar({ pageTitle, displayName, credits, onMenuClick, o
         <div className="relative">
           <button
             type="button"
-            onClick={() => setProfileOpen((v) => !v)}
+            onClick={() => toggle("profile")}
             className="flex items-center gap-1.5 rounded-full p-1 pr-1.5 transition-colors hover:bg-slate-100"
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0F1E35] text-xs font-bold text-white">

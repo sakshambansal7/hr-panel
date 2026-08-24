@@ -1,25 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { Briefcase, FileText, Percent, PhoneCall, BookmarkCheck, UserCheck, ChartColumn } from "lucide-react";
 import DashboardShell from "../components/DashboardShell";
 import { useAuth } from "../../../context/auth-context";
-import { getEmployerJobs, type StoredJob } from "../../../lib/jobs-store";
-import { getApplicationsForJobs, type JobApplication } from "../../../lib/applications-store";
+import { getEmployerJobs } from "../../../lib/jobs-store";
+import { getApplicationsForJobs } from "../../../lib/applications-store";
 import CountUp from "../components/CountUp";
 
 export default function AnalyticsClient() {
   const { user } = useAuth();
-  const [jobs, setJobs] = useState<StoredJob[]>([]);
-  const [applications, setApplications] = useState<JobApplication[]>([]);
-
-  useEffect(() => {
-    if (!user) return;
-    const employerJobs = getEmployerJobs(user.email);
-    setJobs(employerJobs);
-    setApplications(getApplicationsForJobs(employerJobs.map((j) => j.id)));
-  }, [user]);
+  const jobs = useMemo(() => (user ? getEmployerJobs(user.email) : []), [user]);
+  const applications = useMemo(
+    () => getApplicationsForJobs(jobs.map((j) => j.id)),
+    [jobs]
+  );
 
   const totalJobs = jobs.length;
   const totalApplications = applications.length;

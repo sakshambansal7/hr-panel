@@ -79,7 +79,7 @@ export default function ReviewsClient() {
           Company Reviews
         </h1>
         <p className="text-sm text-slate-500">
-          What seafarers who've sailed with your company are saying.
+          What seafarers who&apos;ve sailed with your company are saying.
         </p>
       </div>
 

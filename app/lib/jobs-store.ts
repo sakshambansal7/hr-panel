@@ -1,5 +1,4 @@
-import { jobs as baseJobs, type Job } from "./mock-data";
-import { MOCK_EMPLOYER_EMAIL } from "../context/auth-context";
+
 
 export type JobStatus = "draft" | "pending" | "live" | "paused" | "closed" | "rejected";
 
@@ -138,7 +137,10 @@ function vshipsJob(overrides: Partial<StoredJob> & { id: string; title: string }
     rpslValid: false,
     status: "draft",
     submittedByName: VSHIPS,
-    submittedByEmail: MOCK_EMPLOYER_EMAIL,
+    
+    // 🚀 FIXED: Replaced the broken variable with the hardcoded string
+    submittedByEmail: "hr@vships.com",
+    
     ...overrides,
   };
 }

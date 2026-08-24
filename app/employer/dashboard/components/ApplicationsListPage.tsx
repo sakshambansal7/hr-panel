@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import DashboardShell from "./DashboardShell";
@@ -45,13 +45,11 @@ export default function ApplicationsListPage({
   stageFilter,
 }: ApplicationsListPageProps) {
   const { user } = useAuth();
-  const [rows, setRows] = useState<EnrichedApplication[]>([]);
-
-  useEffect(() => {
-    if (!user) return;
+  const rows = useMemo<EnrichedApplication[]>(() => {
+    if (!user) return [];
     const jobs = getEmployerJobs(user.email);
     const jobMap = new Map(jobs.map((j) => [j.id, j]));
-    const apps = getApplicationsForJobs(jobs.map((j) => j.id))
+    return getApplicationsForJobs(jobs.map((j) => j.id))
       .filter((a) => !stageFilter || a.stage === stageFilter)
       .map((a) => ({
         ...a,
@@ -59,7 +57,6 @@ export default function ApplicationsListPage({
         jobRank: jobMap.get(a.jobId)?.rank ?? "",
       }))
       .sort((a, b) => (a.appliedAt < b.appliedAt ? 1 : -1));
-    setRows(apps);
   }, [user, stageFilter]);
 
   return (

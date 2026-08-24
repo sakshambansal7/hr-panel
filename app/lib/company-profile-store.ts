@@ -1,4 +1,4 @@
-import { MOCK_EMPLOYER_EMAIL } from "../context/auth-context";
+
 
 export type CompanyProfile = {
   companyName: string;
@@ -128,7 +128,10 @@ function fromLegacyEmployerMeta(email: string): CompanyProfile | null {
 export function getCompanyProfile(email: string): CompanyProfile {
   const stored = readJSON<CompanyProfile | null>(profileKey(email), null);
   if (stored) return stored;
-  if (email.toLowerCase() === MOCK_EMPLOYER_EMAIL.toLowerCase()) return SEED_VSHIPS;
+  
+  // 🚀 FIXED: Replaced the broken variable with the hardcoded string
+  if (email.toLowerCase() === "hr@vships.com") return SEED_VSHIPS;
+  
   return fromLegacyEmployerMeta(email) || EMPTY_COMPANY_PROFILE;
 }
 
