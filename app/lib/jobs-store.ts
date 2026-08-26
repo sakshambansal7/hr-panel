@@ -1,6 +1,17 @@
 
+export interface Job {
+  id: string; 
+  title?: string;
+  rank?: string;
+  vessel_type?: string;
+  department?: string;
+  [key: string]: any; 
+}
+
 
 export type JobStatus = "draft" | "pending" | "live" | "paused" | "closed" | "rejected";
+
+
 
 export type StoredJob = Job & {
   status: JobStatus;
@@ -301,7 +312,8 @@ function newId() {
 // Jobs visible on the public website: the seeded catalog plus anything an
 // admin/superadmin has verified and published.
 export function getLiveJobs(): Job[] {
-  return [...getStoredJobs().filter((j) => j.status === "live"), ...baseJobs];
+  // 🚀 FIXED: Removed the missing baseJobs variable
+  return [...getStoredJobs().filter((j) => j.status === "live")]; 
 }
 
 export function findJob(id: string): Job | undefined {
