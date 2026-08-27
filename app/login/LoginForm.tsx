@@ -258,23 +258,7 @@ export default function LoginForm() {
             </Link>
           </p>
 
-          <div 
-            onClick={fillDemoCredentials}
-            className="group relative cursor-pointer overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-50 p-4 transition-all duration-300 hover:border-[#FBBF24]/50 hover:bg-[#FBBF24]/5"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-700 group-hover:text-[#0F172A]">
-                Demo Employer
-              </span>
-              <span className="rounded-full bg-slate-200/60 px-2 py-0.5 text-[10px] font-semibold text-slate-600 group-hover:bg-[#FBBF24]/20 group-hover:text-[#0F172A] transition-all">
-                Click to Auto-fill
-              </span>
-            </div>
-            <div className="space-y-1 text-xs text-slate-500 group-hover:text-slate-700">
-              <p><strong className="font-semibold text-slate-600">Email:</strong> hr@vships.com</p>
-              <p><strong className="font-semibold text-slate-600">Password:</strong> Employer@123</p>
-            </div>
-          </div>
+         
 
         </div>
       </div>
