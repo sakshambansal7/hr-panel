@@ -1,8 +1,6 @@
+
+
 // app/employer/dashboard/applications/page.tsx
-
-// app/employer/dashboard/applications/ApplicationsClient.tsx
-
-// app/employer/dashboard/applications/ApplicationsClient.tsx
 
 "use client";
 

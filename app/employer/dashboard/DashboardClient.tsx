@@ -1,6 +1,3 @@
-// app/employer/dashboard/DashboardClient.tsx
-
-// app/employer/dashboard/DashboardClient.tsx
 
 // app/employer/dashboard/DashboardClient.tsx
 
@@ -15,6 +12,9 @@ import {
 } from "lucide-react";
 import DashboardShell from "./components/DashboardShell";
 import api from "../../lib/api";
+
+
+
 
 export default function DashboardClient() {
   const router = useRouter();
@@ -145,13 +145,12 @@ export default function DashboardClient() {
         </div>
       </div>
 
-      {/* 2. TOP STAT CARDS */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+      {/* 2. TOP STAT CARDS - Changed to grid-cols-5 to fit the 5 remaining cards perfectly */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
         {[
           { label: "Total Jobs", val: stats.total_jobs || 0, sub: "All Jobs", icon: Briefcase, color: "text-blue-600", bg: "bg-blue-50", link: "/employer/dashboard/jobs" },
           { label: "Active Vacancies", val: stats.active_jobs || 0, sub: "Open Positions", icon: CheckCircle, color: "text-emerald-600", bg: "bg-emerald-50", link: "/employer/dashboard/jobs?status=active" },
           { label: "Total Applications", val: stats.total_applications || 0, sub: "All Time", icon: FileText, color: "text-blue-600", bg: "bg-blue-50", link: "/employer/dashboard/applications" },
-          { label: "Apps This Week", val: stats.applications_this_week || 0, sub: "Recent", icon: Users, color: "text-purple-600", bg: "bg-purple-50", link: "/employer/dashboard/applications" },
           { label: "Interviews", val: stats.upcoming_interviews || 0, sub: "Upcoming", icon: Calendar, color: "text-orange-500", bg: "bg-orange-50", link: "/employer/dashboard/interviews" },
           { label: "Hires", val: stats.selected || 0, sub: "Total Selected", icon: CheckCircle, color: "text-emerald-600", bg: "bg-emerald-50", link: "/employer/dashboard/candidates?status=selected" },
         ].map((stat, i) => (
@@ -341,7 +340,7 @@ export default function DashboardClient() {
                       {/* Actions */}
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-center">
-                          <button onClick={() => router.push(`/employer/dashboard/applications/${app.application_id}`)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-200 shadow-sm hover:shadow" title="View Candidate Profile">
+                          <button onClick={() => router.push(`/employer/dashboard/candidates/${app.candidate_id}`)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-200 shadow-sm hover:shadow" title="View Candidate Profile">
                             <Eye className="w-4 h-4" />
                           </button>
                         </div>
