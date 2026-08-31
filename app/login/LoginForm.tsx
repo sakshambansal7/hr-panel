@@ -148,22 +148,7 @@ export default function LoginForm() {
             </p>
           </div>
 
-          <div className="flex rounded-xl bg-slate-100 p-1 border border-slate-200/60">
-            <button
-              type="button"
-              onClick={() => setRole("employer")}
-              className="w-1/2 rounded-lg py-2 text-xs font-semibold tracking-wide transition-all duration-200 bg-white text-[#0F172A] shadow-sm"
-            >
-              Company / Recruiter
-            </button>
-            <button
-              type="button"
-              onClick={() => setRole("seeker")}
-              className="w-1/2 rounded-lg py-2 text-xs font-semibold tracking-wide text-slate-500 transition-all duration-200 hover:text-slate-900"
-            >
-              Job Seeker
-            </button>
-          </div>
+          
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-1.5">

@@ -1,4 +1,6 @@
 // app/signup/page.tsx
+
+
 "use client";
 
 import { Suspense } from "react";
@@ -9,20 +11,11 @@ import api from "../lib/api";
 import { useAuth } from "../context/auth-context";
 import { ChevronDown, Search } from "lucide-react";
 
-const COMPANY_TYPES = [
-  "Manning Agent / RPSL Holder",
-  "Ship Owner",
-  "Ship Management Company",
-  "Crewing Agency",  
-  "Cruise Line",
-  "Other Maritime Employer",
-];
-
-function SectionHeading({ step, title, description }: { step: number; title: string; description: string; }) {
+function SectionHeading({ title, description }: { title: string; description: string; }) {
   return (
     <div className="flex items-start gap-3">
       <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#0F172A] text-xs font-bold text-white">
-        {step}
+        ✓
       </span>
       <div>
         <h2 className="text-base font-bold text-[#0F172A]">{title}</h2>
@@ -76,18 +69,13 @@ function SearchableSelect({
 
   const filtered = useMemo(() => {
     const safeOptions = Array.isArray(options) ? options : [];
-    
     if (!query) return safeOptions; 
 
     const cleanQuery = query.toLowerCase().replace(/[^a-z0-9]/g, ''); 
-    
-    const results = safeOptions.filter((opt) => {
+    return safeOptions.filter((opt) => {
       if (!opt) return false;
-      const cleanOpt = opt.toLowerCase().replace(/[^a-z0-9]/g, '');
-      return cleanOpt.includes(cleanQuery);
+      return opt.toLowerCase().replace(/[^a-z0-9]/g, '').includes(cleanQuery);
     });
-
-    return results;
   }, [options, query]);
 
   return (
@@ -156,7 +144,6 @@ function SignupFormContent() {
   const router = useRouter();
   const { setSessionUser } = useAuth(); 
 
-  const [step, setStep] = useState<1 | 2>(1);
   const [isLoading, setIsLoading] = useState(false);
 
   const [availableCompanies, setAvailableCompanies] = useState<any[]>([]);
@@ -167,20 +154,6 @@ function SignupFormContent() {
   const [mobileNumber, setMobileNumber] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-
-  const [companyName, setCompanyName] = useState("");
-  const [companyType, setCompanyType] = useState("");
-  const [companyWebsite, setCompanyWebsite] = useState("");
-  const [officeAddress, setOfficeAddress] = useState("");
-  const [city, setCity] = useState("");
-  const [state, setState] = useState("");
-  const [country, setCountry] = useState("India");
-
-  const [rpslNumber, setRpslNumber] = useState("");
-  const [rpslValidity, setRpslValidity] = useState("");
-  const [dgShippingDetails, setDgShippingDetails] = useState("");
-  const [companyRegNumber, setCompanyRegNumber] = useState("");
-  const [gstNumber, setGstNumber] = useState("");
 
   const [error, setError] = useState("");
 
@@ -310,7 +283,7 @@ function SignupFormContent() {
         if (data.data?.user) {
           setSessionUser(data.data.user, data.data.accessToken);
         }
-        setOtpNotice("Email verified successfully!");
+        setOtpNotice("Email verified successfully! You can now access your dashboard.");
       } else {
         setOtpError(data.message || "Invalid OTP code.");
       }
@@ -321,7 +294,7 @@ function SignupFormContent() {
     }
   }
 
-  function handleContinue(e: React.FormEvent) {
+  function handleCompleteRegistration(e: React.FormEvent) {
     e.preventDefault();
     setError("");
 
@@ -330,44 +303,8 @@ function SignupFormContent() {
       return;
     }
 
-    const comp = availableCompanies.find(c => c.id.toString() === selectedCompanyId);
-    if (comp && comp.name) setCompanyName(comp.name);
-
-    setStep(2);
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    setIsLoading(true);
-
-    try {
-      const payload = {
-        company_id: selectedCompanyId,
-        company_name: companyName.trim(),
-        company_type: companyType,
-        company_website: companyWebsite.trim(),
-        office_address: officeAddress.trim(),
-        city: city.trim(),
-        state: state.trim(),
-        country: country.trim(),
-        rpsl_number: rpslNumber.trim(),
-        rpsl_validity: rpslValidity,
-        dg_shipping_details: dgShippingDetails.trim(),
-        company_reg_number: companyRegNumber.trim(),
-        gst_number: gstNumber.trim(),
-      };
-
-      const response = await api.post("/auth/register", payload);
-
-      if (response.data?.success || response.status === 201 || response.status === 200) {
-        router.push("/employer/dashboard");
-      }
-    } catch (err: any) {
-      setError(err.response?.data?.message || "Failed to save company details.");
-    } finally {
-      setIsLoading(false);
-    }
+    // Direct redirect to the HR Dashboard
+    router.push("/employer/dashboard");
   }
 
   return (
@@ -422,197 +359,106 @@ function SignupFormContent() {
 
        <div className="flex w-full flex-col items-center bg-white px-6 py-12 md:px-12 lg:w-3/5">
         <div className="w-full max-w-2xl space-y-10">
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <span className="text-[11px] font-bold tracking-widest text-[#13294B] uppercase block">
-                Employer Registration
-              </span>
-              <h1 className="text-3xl font-extrabold tracking-tight text-[#0F172A]">
-                Create Employer Account
-              </h1>
-            </div>
-
-            <div className="flex items-center gap-3">
-              {[
-                { n: 1, label: "Your Details" },
-                { n: 2, label: "Company Verification" },
-              ].map((s, i) => (
-                <div key={s.n} className="flex items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${step >= s.n ? "bg-[#0F172A] text-white" : "bg-slate-100 text-slate-400"}`}>
-                      {s.n}
-                    </span>
-                    <span className={`text-xs font-semibold ${step >= s.n ? "text-[#0F172A]" : "text-slate-400"}`}>
-                      {s.label}
-                    </span>
-                  </div>
-                  {i === 0 && <div className="h-px w-8 bg-slate-200" />}
-                </div>
-              ))}
-            </div>
+          <div className="space-y-2">
+            <span className="text-[11px] font-bold tracking-widest text-[#13294B] uppercase block">
+              Employer Registration
+            </span>
+            <h1 className="text-3xl font-extrabold tracking-tight text-[#0F172A]">
+              Create Employer Account
+            </h1>
           </div>
 
-          {step === 1 && (
-            <form onSubmit={handleContinue} className="space-y-10">
-              <div className="space-y-5">
-                <SectionHeading step={1} title="HR / Recruiter Details" description="Select your company and verify your identity." />
-                <div className="grid gap-5 sm:grid-cols-2">
-                  
-                  <div className="sm:col-span-2 relative z-50">
-                    <Field label="Search Your Company" required>
-                      <SearchableSelect 
-                        options={availableCompanies.map(comp => comp.name)}
-                        value={availableCompanies.find(c => c.id.toString() === selectedCompanyId)?.name || ""}
-                        onChange={(selectedName: string) => {
-                          if (!selectedName) {
-                            setSelectedCompanyId("");
-                            return;
-                          }
-                          const comp = availableCompanies.find(c => c.name === selectedName);
-                          setSelectedCompanyId(comp ? comp.id.toString() : "");
-                        }} 
-                        placeholder="-- Type to search your registered organization --"
-                      />
-                    </Field>
-                  </div>
+          <form onSubmit={handleCompleteRegistration} className="space-y-10">
+            <div className="space-y-5">
+              <SectionHeading title="HR / Recruiter Details" description="Select your company and verify your identity." />
+              <div className="grid gap-5 sm:grid-cols-2">
+                
+                <div className="sm:col-span-2 relative z-50">
+                  <Field label="Search Your Company" required>
+                    <SearchableSelect 
+                      options={availableCompanies.map(comp => comp.name)}
+                      value={availableCompanies.find(c => c.id.toString() === selectedCompanyId)?.name || ""}
+                      onChange={(selectedName: string) => {
+                        if (!selectedName) {
+                          setSelectedCompanyId("");
+                          return;
+                        }
+                        const comp = availableCompanies.find(c => c.name === selectedName);
+                        setSelectedCompanyId(comp ? comp.id.toString() : "");
+                      }} 
+                      placeholder="-- Type to search your registered organization --"
+                    />
+                  </Field>
+                </div>
 
-                  <Field label="Full Name" required>
-                    <input required value={fullName} onChange={(e) => setFullName(e.target.value)} className={inputClass} placeholder="Enter your name" />
-                  </Field>
-                  <Field label="Mobile Number" required>
-                    <input required type="tel" inputMode="numeric" pattern="[0-9]{10}" maxLength={10} value={mobileNumber} onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, "").slice(0, 10))} className={inputClass} placeholder="9876543210" />
-                  </Field>
-                  <Field label="Password" required>
-                    <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} placeholder="At least 6 characters" />
-                  </Field>
-                  <Field label="Confirm Password" required>
-                    <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className={inputClass} placeholder="••••••••" />
-                  </Field>
+                <Field label="Full Name" required>
+                  <input required value={fullName} onChange={(e) => setFullName(e.target.value)} className={inputClass} placeholder="Enter your name" />
+                </Field>
+                <Field label="Mobile Number" required>
+                  <input required type="tel" inputMode="numeric" pattern="[0-9]{10}" maxLength={10} value={mobileNumber} onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, "").slice(0, 10))} className={inputClass} placeholder="9876543210" />
+                </Field>
+                <Field label="Password" required>
+                  <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} placeholder="At least 8 characters" />
+                </Field>
+                <Field label="Confirm Password" required>
+                  <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className={inputClass} placeholder="••••••••" />
+                </Field>
 
-                  <div className="sm:col-span-2">
-                    <Field label="Official Email" required>
-                      <div className="flex gap-2">
-                        <input type="email" required value={officialEmail} onChange={(e) => handleEmailChange(e.target.value)} className={inputClass} placeholder="hr@company.com" />
-                        {!emailVerified && (
-                          <button 
-                            type="button" 
-                            onClick={otpSent ? handleResendOtp : handleSendOtp} 
-                            disabled={isLoading} 
-                            className="shrink-0 whitespace-nowrap rounded-2xl border border-slate-300 bg-slate-100 px-5 text-xs font-bold text-[#0F172A] transition-colors hover:bg-slate-200 disabled:opacity-50 shadow-sm"
-                          >
-                            {isLoading ? "Processing..." : otpSent ? "Resend OTP" : "Send OTP"}
-                          </button>
-                        )}
-                        {emailVerified && (
-                          <span className="flex shrink-0 items-center gap-1.5 rounded-2xl bg-emerald-50 px-4 text-xs font-bold text-emerald-700 border border-emerald-200 shadow-sm">
-                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                            Verified
-                          </span>
-                        )}
-                      </div>
-                    </Field>
-                  </div>
-
-                  {otpSent && !emailVerified && (
-                    <div className="sm:col-span-2 flex items-end gap-2 animate-fade-in">
-                      <Field label="Enter OTP">
-                        <input value={otpValue} onChange={(e) => setOtpValue(e.target.value)} className={inputClass} placeholder="6-digit code" maxLength={6} />
-                      </Field>
-                      <button type="button" onClick={handleVerifyOtp} disabled={isLoading} className="mb-0.5 shrink-0 whitespace-nowrap rounded-2xl bg-[#0F172A] px-6 py-3.5 text-xs font-bold text-white transition-colors hover:bg-[#13294B] shadow-md disabled:opacity-50">
-                        {isLoading ? "Verifying..." : "Verify OTP"}
-                      </button>
+                <div className="sm:col-span-2">
+                  <Field label="Official Email" required>
+                    <div className="flex gap-2">
+                      <input type="email" required value={officialEmail} onChange={(e) => handleEmailChange(e.target.value)} className={inputClass} placeholder="hr@company.com" />
+                      {!emailVerified && (
+                        <button 
+                          type="button" 
+                          onClick={otpSent ? handleResendOtp : handleSendOtp} 
+                          disabled={isLoading} 
+                          className="shrink-0 whitespace-nowrap rounded-2xl border border-slate-300 bg-slate-100 px-5 text-xs font-bold text-[#0F172A] transition-colors hover:bg-slate-200 disabled:opacity-50 shadow-sm"
+                        >
+                          {isLoading ? "Processing..." : otpSent ? "Resend OTP" : "Send OTP"}
+                        </button>
+                      )}
+                      {emailVerified && (
+                        <span className="flex shrink-0 items-center gap-1.5 rounded-2xl bg-emerald-50 px-4 text-xs font-bold text-emerald-700 border border-emerald-200 shadow-sm">
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                          Verified
+                        </span>
+                      )}
                     </div>
-                  )}
-                  {otpNotice && <p className="sm:col-span-2 text-xs font-bold text-emerald-600 animate-fade-in">{otpNotice}</p>}
-                  {otpError && <p className="sm:col-span-2 text-xs font-bold text-red-600 animate-fade-in">{otpError}</p>}
+                  </Field>
                 </div>
+
+                {otpSent && !emailVerified && (
+                  <div className="sm:col-span-2 flex items-end gap-2 animate-fade-in">
+                    <Field label="Enter OTP">
+                      <input value={otpValue} onChange={(e) => setOtpValue(e.target.value)} className={inputClass} placeholder="6-digit code" maxLength={6} />
+                    </Field>
+                    <button type="button" onClick={handleVerifyOtp} disabled={isLoading} className="mb-0.5 shrink-0 whitespace-nowrap rounded-2xl bg-[#0F172A] px-6 py-3.5 text-xs font-bold text-white transition-colors hover:bg-[#13294B] shadow-md disabled:opacity-50">
+                      {isLoading ? "Verifying..." : "Verify OTP"}
+                    </button>
+                  </div>
+                )}
+                {otpNotice && <p className="sm:col-span-2 text-xs font-bold text-emerald-600 animate-fade-in">{otpNotice}</p>}
+                {otpError && <p className="sm:col-span-2 text-xs font-bold text-red-600 animate-fade-in">{otpError}</p>}
               </div>
+            </div>
 
-              {error && (
-                <div className="flex items-center gap-2 rounded-xl bg-red-50 p-4 text-xs font-bold text-red-700 border border-red-200 animate-fade-in">
-                  <svg className="h-5 w-5 shrink-0 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  {error}
-                </div>
-              )}
-
-              <button type="submit" className="group relative flex w-full items-center justify-center gap-2 rounded-2xl bg-[#FBBF24] py-4 text-sm font-bold text-[#0F172A] shadow-lg shadow-amber-500/10 transition-all duration-300 hover:bg-[#FCD34D] hover:shadow-xl hover:shadow-amber-500/20 active:scale-[0.98]">
-                Continue to Verification
-                <span className="transition-transform duration-200 group-hover:translate-x-1">→</span>
-              </button>
-            </form>
-          )}
-
-          {step === 2 && (
-            <form onSubmit={handleSubmit} className="space-y-10">
-              <div className="space-y-5">
-                <SectionHeading step={2} title="Company Verification Details" description="Update your organization's compliance records." />
-                <div className="grid gap-5 sm:grid-cols-2">
-                  <Field label="Company Name" required>
-                    <input required value={companyName} onChange={(e) => setCompanyName(e.target.value)} className={inputClass} placeholder="V.Ships Crew Management" />
-                  </Field>
-                  <Field label="Company Type" required>
-                    <select required value={companyType} onChange={(e) => setCompanyType(e.target.value)} className={inputClass}>
-                      <option value="">Select</option>
-                      {COMPANY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                  </Field>
-                  <Field label="Company Website">
-                    <input value={companyWebsite} onChange={(e) => setCompanyWebsite(e.target.value)} className={inputClass} placeholder="https://" />
-                  </Field>
-                  <Field label="Office Address">
-                    <input value={officeAddress} onChange={(e) => setOfficeAddress(e.target.value)} className={inputClass} placeholder="Office address" />
-                  </Field>
-                  <Field label="City">
-                    <input value={city} onChange={(e) => setCity(e.target.value)} className={inputClass} placeholder="City" />
-                  </Field>
-                  <Field label="State">
-                    <input value={state} onChange={(e) => setState(e.target.value)} className={inputClass} placeholder="State" />
-                  </Field>
-                  <Field label="Country">
-                    <input value={country} onChange={(e) => setCountry(e.target.value)} className={inputClass} placeholder="India" />
-                  </Field>
-                </div>
+            {error && (
+              <div className="flex items-center gap-2 rounded-xl bg-red-50 p-4 text-xs font-bold text-red-700 border border-red-200 animate-fade-in">
+                <svg className="h-5 w-5 shrink-0 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                {error}
               </div>
+            )}
 
-              <div className="space-y-5 border-t border-slate-200 pt-8">
-                <SectionHeading step={3} title="Maritime Compliance" description="Add RPSL / DG Shipping details for faster job verification." />
-                <div className="grid gap-5 sm:grid-cols-2">
-                  <Field label="RPSL Number">
-                    <input value={rpslNumber} onChange={(e) => setRpslNumber(e.target.value)} className={inputClass} placeholder="RPSL/MUM/xxxx/xxx" />
-                  </Field>
-                  <Field label="RPSL Validity Date">
-                    <input type="date" value={rpslValidity} onChange={(e) => setRpslValidity(e.target.value)} className={inputClass} placeholder="dd/mm/yyyy" />
-                  </Field>
-                  <Field label="DG Shipping Details">
-                    <input value={dgShippingDetails} onChange={(e) => setDgShippingDetails(e.target.value)} className={inputClass} placeholder="DG Shipping registration details" />
-                  </Field>
-                  <Field label="Company Registration Number">
-                    <input value={companyRegNumber} onChange={(e) => setCompanyRegNumber(e.target.value)} className={inputClass} placeholder="Company registration number" />
-                  </Field>
-                  <Field label="GST Number (Optional)">
-                    <input value={gstNumber} onChange={(e) => setGstNumber(e.target.value)} className={inputClass} placeholder="GST number" />
-                  </Field>
-                </div>
-              </div>
-
-              {error && (
-                <div className="flex items-center gap-2 rounded-xl bg-red-50 p-4 text-xs font-bold text-red-700 border border-red-200 animate-fade-in">
-                  <svg className="h-5 w-5 shrink-0 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  {error}
-                </div>
-              )}
-
-              <div className="flex gap-3">
-                <button type="button" disabled={isLoading} onClick={() => setStep(1)} className="shrink-0 rounded-2xl border border-slate-300 bg-white px-6 py-4 text-sm font-bold text-[#0F172A] transition-colors hover:bg-slate-50 shadow-sm disabled:opacity-50">
-                  Back
-                </button>
-                <button type="submit" disabled={isLoading} className="group relative flex flex-1 items-center justify-center gap-2 rounded-2xl bg-[#FBBF24] py-4 text-sm font-bold text-[#0F172A] shadow-lg shadow-amber-500/10 transition-all duration-300 hover:bg-[#FCD34D] hover:shadow-xl hover:shadow-amber-500/20 active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed">
-                  {isLoading ? "Saving..." : "Complete Account"}
-                  {!isLoading && <span className="transition-transform duration-200 group-hover:translate-x-1">→</span>}
-                </button>
-              </div>
-            </form>
-          )}
+            <button 
+              type="submit" 
+              disabled={!emailVerified}
+              className="group relative flex w-full items-center justify-center gap-2 rounded-2xl bg-[#FBBF24] py-4 text-sm font-bold text-[#0F172A] shadow-lg shadow-amber-500/10 transition-all duration-300 hover:bg-[#FCD34D] hover:shadow-xl hover:shadow-amber-500/20 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Create Account & Go to Dashboard
+              <span className="transition-transform duration-200 group-hover:translate-x-1">→</span>
+            </button>
+          </form>
 
           <p className="text-center text-sm font-semibold text-slate-500">
             Already have an employer account?{" "}

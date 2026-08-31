@@ -1,222 +1,317 @@
 // app/employer/dashboard/applications/page.tsx
 
+// app/employer/dashboard/applications/ApplicationsClient.tsx
+
+// app/employer/dashboard/applications/ApplicationsClient.tsx
 
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Mail, Phone, Filter, Briefcase } from "lucide-react";
-import DashboardShell from "../components/DashboardShell";
+import { 
+  Search, Filter, Eye, MoreVertical, 
+  Mail, Phone, Clock, Ship, Anchor, CheckCircle, AlertCircle 
+} from "lucide-react";
+import DashboardShell from "../components/DashboardShell"; // Adjust path if necessary
 import api from "../../../lib/api";
 
-const STATUS_COLORS: Record<string, string> = {
-  applied: "bg-slate-100 text-slate-600 border-slate-200",
-  shortlisted: "bg-blue-50 text-blue-700 border-blue-200",
-  interviewed: "bg-purple-50 text-purple-700 border-purple-200",
-  selected: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  rejected: "bg-red-50 text-red-700 border-red-200",
-};
-
-const APPLICATION_STATUSES = ["applied", "shortlisted", "interviewed", "selected", "rejected"];
-
-function formatTitleCase(str: string | null | undefined): string {
-  if (!str) return "N/A";
-  return str.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
-// 🚀 BULLETPROOF ARRAY EXTRACTOR
-function extractArray(resData: any): any[] {
-  if (!resData) return [];
-  if (Array.isArray(resData)) return resData;
-  if (resData.data && Array.isArray(resData.data)) return resData.data;
-  if (resData.data?.data && Array.isArray(resData.data.data)) return resData.data.data;
-  if (resData.items && Array.isArray(resData.items)) return resData.items;
-  if (resData.data?.items && Array.isArray(resData.data.items)) return resData.data.items;
-  return [];
-}
-
-export default function GlobalApplicationsPage() {
+export default function ApplicationsClient() {
   const [applications, setApplications] = useState<any[]>([]);
-  const [jobs, setJobs] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // Filters State
-  const [selectedJobId, setSelectedJobId] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-
-  const fetchWorkspaceData = useCallback(async () => {
-    setIsLoading(true);
-    
-    try {
-      // 1. Fetch ALL applications for the company (bypass pagination)
-      const appRes = await api.get('/hr/applications?limit=1000');
-      setApplications(extractArray(appRes.data));
-    } catch (err) {
-      console.error("Failed to fetch applications:", err);
-    }
-
-    try {
-      // 2. Fetch ALL jobs to populate the filter dropdown
-      const jobsRes = await api.get('/hr/jobs?limit=1000');
-      const allJobs = extractArray(jobsRes.data);
-      
-      // Filter out closed jobs so the dropdown stays clean (optional)
-      const activeJobs = allJobs.filter((j: any) => j.job_status?.toLowerCase() !== "closed");
-      setJobs(activeJobs);
-    } catch (err) {
-      console.error("Failed to fetch jobs for filter:", err);
-    }
-
-    setIsLoading(false);
-  }, []);
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const limit = 10; // Set to 5 for testing pagination easily
 
   useEffect(() => {
-    fetchWorkspaceData();
-  }, [fetchWorkspaceData]);
+    const fetchApplications = async () => {
+      try {
+        setIsLoading(true);
+        const res = await api.get(`/hr/applications?page=${page}&limit=${limit}`);
+        
+        // Extract data based on your HrService format { items: [], pagination: {} }
+        const payload = res.data?.data || res.data;
+        let appsArray = [];
+        
+        if (payload?.items && Array.isArray(payload.items)) {
+            appsArray = payload.items;
+        } else if (Array.isArray(payload?.data)) {
+            appsArray = payload.data;
+        } else if (Array.isArray(payload)) {
+            appsArray = payload;
+        }
 
-  const handleStatusChange = async (applicationId: number, newStatus: string) => {
+        setApplications(appsArray);
+        setTotalItems(payload?.pagination?.total || payload?.total || appsArray.length);
+        setTotalPages(payload?.pagination?.totalPages || Math.ceil((payload?.total || appsArray.length) / limit) || 1);
+      } catch (err) {
+        console.error("Failed to fetch applications", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchApplications();
+  }, [page]);
+
+  const handleStatusChange = async (appId: string, newStatus: string) => {
     try {
+      // Optimistic UI Update
       setApplications(prev => prev.map(app => 
-        (app.application_id === applicationId || app.id === applicationId) 
-          ? { ...app, status: newStatus } 
-          : app
+        app.application_id === appId ? { ...app, status: newStatus } : app
       ));
-      await api.patch(`/hr/applications/${applicationId}/status`, { status: newStatus });
-    } catch (err: any) {
-      alert("Failed to update candidate status.");
-      fetchWorkspaceData(); // Revert on failure
+      await api.patch(`/hr/applications/${appId}/status`, { status: newStatus });
+    } catch (err) {
+      console.error("Failed to update status", err);
     }
   };
 
-  // 🚀 INSTANT FRONTEND FILTERING
-  const filteredApplications = useMemo(() => {
-    return applications.filter(app => {
-      const matchJob = selectedJobId === "all" || String(app.job_id) === selectedJobId;
-      const matchStatus = statusFilter === "all" || app.status?.toLowerCase() === statusFilter.toLowerCase();
-      return matchJob && matchStatus;
-    });
-  }, [applications, selectedJobId, statusFilter]);
+  // Temporary helper to generate a visually consistent mock match score 
+  const getMockMatchScore = (id: string | number) => {
+    const num = typeof id === 'number' ? id : parseInt(String(id).replace(/\D/g, '')) || 85;
+    const score = (num % 40) + 60; // Keeps it between 60 and 99
+    
+    let label = 'Fair';
+    if (score >= 90) label = 'Excellent';
+    else if (score >= 70) label = 'Good';
+    else if (score < 65) label = 'Low Match';
+
+    return { score, label };
+  };
+
+  // 🚀 Helper to generate smart pagination numbers (e.g., 1 ... 8 9 10 ... 100)
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      if (page <= 3) {
+        pages.push(1, 2, 3, 4, '...', totalPages);
+      } else if (page >= totalPages - 2) {
+        pages.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      } else {
+        pages.push(1, '...', page - 1, page, page + 1, '...', totalPages);
+      }
+    }
+    return pages;
+  };
 
   return (
-    <DashboardShell pageTitle="Global Applications">
-      <div className="mb-8">
-        <span className="text-[11px] font-bold tracking-widest text-[#0F1E35] uppercase block mb-1">
-          Hiring Pipeline
-        </span>
-        <h1 className="text-2xl font-extrabold tracking-tight text-[#0F1E35] sm:text-3xl mb-2">
-          Global Applications
-        </h1>
-        <p className="text-sm font-medium text-slate-500">
-          Candidates who have applied, been shortlisted, interviewed, or selected across all your jobs.
-        </p>
-      </div>
-
-      <div className="rounded-[20px] border border-[#E7EAF1] bg-white shadow-[0_1px_2px_rgba(15,30,53,0.04)] overflow-hidden">
-        
-        {/* 🚀 THE NEW FILTER BAR */}
-        <div className="p-5 border-b border-[#E7EAF1] bg-slate-50/50 flex flex-wrap items-center justify-between gap-4">
-           <h2 className="text-sm font-bold text-[#0F1E35]">Pipeline ({filteredApplications.length})</h2>
-           
-           <div className="flex flex-wrap items-center gap-3">
-             
-             {/* Job Filter Dropdown */}
-             <div className="flex items-center gap-2">
-               <Briefcase className="h-4 w-4 text-slate-400" />
-               <select 
-                 value={selectedJobId}
-                 onChange={(e) => setSelectedJobId(e.target.value)}
-                 className="text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#F5B61A] max-w-[200px] truncate"
-               >
-                 <option value="all">All Active Jobs</option>
-                 {jobs.map(job => {
-                   const rank = job.job_rank || job.rank || "Position";
-                   return (
-                     <option key={job.job_id || job.id} value={job.job_id || job.id}>
-                       {formatTitleCase(rank)} · {formatTitleCase(job.vessel_type)}
-                     </option>
-                   );
-                 })}
-               </select>
-             </div>
-
-             {/* Status Filter Dropdown */}
-             <div className="flex items-center gap-2">
-               <Filter className="h-4 w-4 text-slate-400" />
-               <select 
-                 value={statusFilter}
-                 onChange={(e) => setStatusFilter(e.target.value)}
-                 className="text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#F5B61A]"
-               >
-                 <option value="all">All Statuses</option>
-                 {APPLICATION_STATUSES.map(s => (
-                   <option key={s} value={s}>{formatTitleCase(s)}</option>
-                 ))}
-               </select>
-             </div>
-             
-           </div>
-        </div>
-        
-        {isLoading ? (
-           <div className="p-16 text-center flex flex-col items-center justify-center space-y-4">
-             <div className="h-8 w-8 rounded-full border-4 border-slate-200 border-t-[#0F1E35] animate-spin"></div>
-             <p className="text-sm font-bold text-slate-400">Loading Pipeline...</p>
-           </div>
-        ) : filteredApplications.length === 0 ? (
-          <div className="p-16 text-center text-sm font-medium text-slate-400">
-            No candidates match your current filters.
+    <DashboardShell pageTitle="Applications">
+      {/* Force a light background wrapper to prevent the black void issue */}
+      <div className="bg-[#F4F7F9] min-h-screen -m-6 p-6">
+        <div className="max-w-7xl mx-auto w-full">
+          
+          {/* HEADER & FILTERS */}
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+            <div>
+              <h1 className="text-3xl font-black text-[#0F1E35]">Applications</h1>
+              <p className="text-sm text-slate-500 mt-1">Review, filter, and manage maritime candidate applications.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input 
+                  type="text" 
+                  placeholder="Search candidate..." 
+                  className="pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none w-64 shadow-sm transition-all"
+                />
+              </div>
+              <button className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 shadow-sm transition-all">
+                <Filter className="w-4 h-4" /> Filter
+              </button>
+            </div>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-slate-600">
-              <thead className="border-b border-[#E7EAF1] bg-slate-50/50 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                <tr>
-                  <th className="px-6 py-4">Candidate</th>
-                  <th className="px-6 py-4">Position / Job</th>
-                  <th className="px-6 py-4">Contact Details</th>
-                  <th className="px-6 py-4">Pipeline Stage</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#E7EAF1] bg-white">
-                {filteredApplications.map((app) => (
-                  <tr key={app.application_id || app.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <p className="font-bold text-[#0F1E35]">{formatTitleCase(app.candidate_name)}</p>
-                      <Link href={`/employer/dashboard/candidates/${app.candidate_id || app.user_id}`} className="text-xs font-bold text-blue-600 hover:underline mt-0.5 inline-block">
-                        View Profile &rarr;
-                      </Link>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="font-bold text-[#0F1E35]">{formatTitleCase(app.rank)}</p>
-                      <p className="text-xs font-medium text-slate-500 mt-0.5">
-                        {formatTitleCase(app.vessel_type || app.ship_type)}
-                      </p>
-                    </td>
-                    <td className="px-6 py-4 space-y-1.5">
-                      <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
-                        <Mail className="h-3.5 w-3.5 text-slate-400" /> {app.candidate_email || app.email || "N/A"}
+
+          {/* LOADING STATE */}
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center h-64 text-slate-400 font-bold animate-pulse">
+              Loading applications...
+            </div>
+          ) : applications.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 text-slate-500 bg-white border border-slate-200 rounded-[20px] shadow-sm">
+              <p className="font-bold text-lg text-slate-700">No applications found.</p>
+              <p className="text-sm">When seafarers apply to your jobs, they will appear here.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* HORIZONTAL CARDS LIST */}
+              {applications.map((app) => {
+                const match = getMockMatchScore(app.application_id);
+                
+                return (
+                  <div key={app.application_id} className="group bg-white border border-slate-200 rounded-[20px] p-5 md:p-6 shadow-sm hover:shadow-md hover:border-blue-300 transition-all duration-300 flex flex-col xl:flex-row items-start xl:items-center gap-6 relative overflow-hidden">
+                    
+                    {/* Left Accent Bar */}
+                    <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${
+                      app.status === 'shortlisted' ? 'bg-purple-500' :
+                      app.status === 'interviewed' ? 'bg-orange-500' :
+                      app.status === 'selected' ? 'bg-emerald-500' :
+                      app.status === 'rejected' ? 'bg-red-500' :
+                      'bg-blue-500'
+                    }`} />
+
+                    {/* 1. CANDIDATE PROFILE (Left - AVATARS REMOVED) */}
+                    <div className="flex flex-col w-full xl:w-[30%] xl:pl-2">
+                      <div className="flex items-center gap-2">
+                        <Link href={`/employer/dashboard/candidates/${app.candidate_id}`} className="text-lg font-bold text-[#0F1E35] hover:text-blue-600 transition-colors">
+                          {app.candidate_name || "Unknown Candidate"}
+                        </Link>
+                        {match.score >= 90 && (
+                          <span title="Top Candidate" className="flex items-center">
+                            <CheckCircle className="w-4 h-4 text-emerald-500" />
+                          </span>
+                        )}
                       </div>
-                      <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
-                        <Phone className="h-3.5 w-3.5 text-slate-400" /> {app.phone_number || "N/A"}
+                      <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 mt-1">
+                        <span className="bg-slate-100 px-2 py-0.5 rounded-md">ID: {app.candidate_id}</span>
                       </div>
-                    </td>
-                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3 mt-2 text-xs text-slate-400">
+                        <a href={`mailto:${app.candidate_email}`} className="flex items-center gap-1 hover:text-blue-600 cursor-pointer transition-colors"><Mail className="w-3 h-3"/> Email</a>
+                        {app.phone_number && <a href={`tel:${app.phone_number}`} className="flex items-center gap-1 hover:text-blue-600 cursor-pointer transition-colors"><Phone className="w-3 h-3"/> Call</a>}
+                      </div>
+                    </div>
+
+                    {/* 2. JOB DETAILS (Middle-Left) */}
+                    <div className="w-full xl:w-[25%] flex flex-col justify-center border-l-0 xl:border-l border-slate-100 xl:pl-6">
+                      <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400 mb-1">Applied Position</p>
+                      <div className="flex items-center gap-2 font-bold text-slate-900 mb-1">
+                        <Anchor className="w-4 h-4 text-blue-500" />
+                        {app.rank || app.job_type || 'Unspecified Role'}
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                        <Ship className="w-3.5 h-3.5" />
+                        {app.department || app.ship_type || 'Unspecified Dept'}
+                      </div>
+                    </div>
+
+                    {/* 3. READINESS MATCH (Middle-Right) */}
+                    <div className="w-full xl:w-[25%] flex flex-col justify-center border-l-0 xl:border-l border-slate-100 xl:pl-6">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400">Readiness Match</p>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-md uppercase font-bold 
+                          ${match.score >= 90 ? 'bg-emerald-50 text-emerald-700' : 
+                            match.score >= 70 ? 'bg-blue-50 text-blue-700' : 
+                            'bg-red-50 text-red-700'}`}>
+                          {match.label}
+                        </span>
+                      </div>
+                      
+                      {/* Progress Bar */}
+                      <div className="flex items-center gap-3">
+                        <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full ${match.score >= 90 ? 'bg-emerald-500' : match.score >= 70 ? 'bg-blue-500' : 'bg-red-500'}`}
+                            style={{ width: `${match.score}%` }}
+                          />
+                        </div>
+                        <span className="text-sm font-black text-slate-900">{match.score}%</span>
+                      </div>
+
+                      {/* Mock Warning for Low Match */}
+                      {match.score < 70 && (
+                        <div className="flex items-start gap-1.5 mt-2 text-red-600 bg-red-50 p-1.5 rounded-lg border border-red-100">
+                          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                          <span className="text-[10px] font-semibold leading-tight">Missing documentation</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 4. STATUS & ACTIONS (Right) */}
+                    <div className="w-full xl:w-[20%] flex flex-row xl:flex-col items-center xl:items-end justify-between xl:justify-center border-t xl:border-t-0 border-slate-100 pt-4 xl:pt-0 gap-3 ml-auto">
+                      
                       <select 
-                        value={app.status?.toLowerCase()}
-                        onChange={(e) => handleStatusChange(app.application_id || app.id, e.target.value)}
-                        className={`text-xs font-bold px-3 py-1.5 rounded-full border focus:outline-none cursor-pointer transition-colors ${STATUS_COLORS[app.status?.toLowerCase()] || STATUS_COLORS.applied}`}
+                        value={app.status}
+                        onChange={(e) => handleStatusChange(app.application_id, e.target.value)}
+                        className={`w-full xl:w-40 px-3 py-2 rounded-xl text-sm font-bold border-2 outline-none cursor-pointer transition-colors shadow-sm
+                          ${app.status === 'shortlisted' ? 'bg-purple-50 border-purple-200 text-purple-700 focus:border-purple-500' :
+                            app.status === 'interviewed' ? 'bg-orange-50 border-orange-200 text-orange-700 focus:border-orange-500' :
+                            app.status === 'selected' ? 'bg-emerald-50 border-emerald-200 text-emerald-700 focus:border-emerald-500' :
+                            app.status === 'rejected' ? 'bg-red-50 border-red-200 text-red-700 focus:border-red-500' :
+                            'bg-blue-50 border-blue-200 text-blue-700 focus:border-blue-500'}`}
                       >
-                        {APPLICATION_STATUSES.map(s => (
-                          <option key={s} value={s} className="bg-white text-slate-800">{formatTitleCase(s)}</option>
-                        ))}
+                        <option value="applied">Applied</option>
+                        <option value="shortlisted">Shortlisted</option>
+                        <option value="interviewed">Interviewed</option>
+                        <option value="selected">Selected</option>
+                        <option value="rejected">Rejected</option>
                       </select>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+
+                      <div className="flex items-center gap-2">
+                        <p className="text-[10px] font-medium text-slate-400 hidden xl:block">
+                          Applied: {new Date(app.created_at).toLocaleDateString()}
+                        </p>
+                        <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100" title="View Application">
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button className="p-2 text-slate-400 hover:text-[#0F1E35] hover:bg-slate-100 rounded-lg transition-colors border border-transparent hover:border-slate-200">
+                          <MoreVertical className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* REAL PAGINATION CONTROL */}
+          {!isLoading && applications.length > 0 && (
+            <div className="flex items-center justify-between mt-8 p-4 bg-white border border-slate-200 rounded-[20px] shadow-sm flex-wrap gap-4">
+              <span className="text-sm text-slate-500 font-medium">
+                Showing {((page - 1) * limit) + 1} to {Math.min(page * limit, totalItems)} of {totalItems} applications
+              </span>
+              
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <button 
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="px-4 py-2 border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Prev
+                </button>
+                
+                {/* Smart Page Numbers (Hidden on tiny mobile screens to prevent overflow, visible on sm+) */}
+                <div className="hidden sm:flex items-center gap-1.5">
+                  {getPageNumbers().map((num, idx) => (
+                    num === '...' ? (
+                      <span key={`ellipsis-${idx}`} className="px-2 py-2 text-slate-400 font-bold tracking-widest">
+                        ...
+                      </span>
+                    ) : (
+                      <button 
+                        key={`page-${num}`}
+                        onClick={() => setPage(num as number)}
+                        className={`min-w-[40px] px-3 py-2 border rounded-xl text-sm font-semibold transition-colors
+                          ${num === page 
+                            ? 'border-[#0F1E35] bg-[#0F1E35] text-white shadow-sm' 
+                            : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+                          }`}
+                      >
+                        {num}
+                      </button>
+                    )
+                  ))}
+                </div>
+
+                <button 
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages || totalPages === 0}
+                  className="px-4 py-2 border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+
+        </div>
       </div>
     </DashboardShell>
   );

@@ -24,6 +24,8 @@ function formatTitleCase(str: string | null | undefined): string {
   return str.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+
+
 function extractArray(resData: any): any[] {
   if (!resData) return [];
   if (Array.isArray(resData)) return resData;
@@ -138,7 +140,14 @@ export default function JobATSPage() {
 
       <div className="rounded-[20px] border border-[#E7EAF1] bg-white shadow-[0_1px_2px_rgba(15,30,53,0.04)] overflow-hidden">
         <div className="p-5 border-b border-[#E7EAF1] bg-slate-50/50 flex flex-wrap items-center justify-between gap-4">
-           <h2 className="text-sm font-bold text-[#0F1E35]">Candidate Applications</h2>
+          <div className="flex items-center gap-4">
+  <h2 className="text-sm font-bold text-[#0F1E35]">Candidate Applications</h2>
+  <Link href={`/employer/dashboard/jobs/${jobId}/review`}>
+    <button className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-blue-700">
+      ⚡ Start Speed Review
+    </button>
+  </Link>
+</div>
            <div className="flex items-center gap-2">
              <Filter className="h-4 w-4 text-slate-400" />
              <select 
@@ -147,6 +156,13 @@ export default function JobATSPage() {
                className="text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#F5B61A]"
              >
                <option value="">All Statuses</option>
+
+               <Link href={`/employer/dashboard/jobs/${jobId}/review`}>
+                    <button className="bg-[#0F1E35] text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-[#1a2e4c]">
+                      Start Speed Review ⚡
+                    </button>
+              </Link>
+              
                {APPLICATION_STATUSES.map(s => (
                  <option key={s} value={s}>{formatTitleCase(s)}</option>
                ))}
