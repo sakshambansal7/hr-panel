@@ -29,7 +29,7 @@ export const NAV_ITEMS: NavItem[] = [
   // { label: "Smart Sourcing", href: "/employer/dashboard/smart-sourcing", icon: Sparkles },
   { label: "Applications", href: "/employer/dashboard/applications", icon: FileText },
   { label: "Shortlisted", href: "/employer/dashboard/shortlisted", icon: BookmarkCheck },
-  { label: "Interviews", href: "/employer/dashboard/interviews", icon: Calendar },
+  // { label: "Interviews", href: "/employer/dashboard/interviews", icon: Calendar },
   // { label: "Analytics", href: "/employer/dashboard/analytics", icon: ChartColumn },
   { label: "Company Profile", href: "/employer/dashboard/company", icon: Building2 },
   // { label: "Reviews", href: "/employer/dashboard/reviews", icon: Star },

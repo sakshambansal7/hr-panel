@@ -18,33 +18,26 @@ function getInitials(name: string = "") {
 }
 
 export default function CompanyProfilePage() {
+  // Correct state setter
   const [company, setCompany] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+useEffect(() => {
     const fetchCompanyData = async () => {
       try {
         setIsLoading(true);
-        // 🚀 Adjust this endpoint if your backend uses a different route to fetch the HR's company details
-        const res = await api.get('/company/profile').catch(() => api.get('/company'));
+        setError(null);
+
+        // 🚀 SMART API CALL: Backend will identify the company using the HR's secure auth token
+        const res = await api.get('/hr/company');
         
-        let apiData = res.data?.data || res.data || {};
-        let finalCompany: any = { ...apiData };
+        const companyData = res.data?.data || res.data;
+        setCompany(companyData);
 
-        // Unpack EAV fields if your company table uses them
-        const fieldsArray = apiData.fields || (Array.isArray(apiData) ? apiData : []);
-        if (fieldsArray.length > 0) {
-          fieldsArray.forEach((field: any) => {
-            const { meta_data: key, meta_value: value } = field;
-            if (value !== null && value !== undefined && value !== "") {
-              finalCompany[key] = value;
-            }
-          });
-        }
-
-        setCompany(finalCompany);
-      } catch (error) {
-        console.error("Failed to fetch company profile:", error);
+      } catch (err: any) {
+        console.error("Failed to fetch company profile:", err);
+        setError(err.response?.data?.message || "Failed to load company profile.");
       } finally {
         setIsLoading(false);
       }
@@ -59,6 +52,19 @@ export default function CompanyProfilePage() {
         <div className="flex h-[60vh] flex-col items-center justify-center font-bold text-slate-400">
           <Loader2 className="h-10 w-10 animate-spin text-blue-600 mb-4" />
           Loading Company Details...
+        </div>
+      </DashboardShell>
+    );
+  }
+
+  if (error || !company) {
+    return (
+      <DashboardShell pageTitle="Company Profile">
+        <div className="flex h-[60vh] flex-col items-center justify-center font-bold text-slate-400 space-y-3">
+          <div className="rounded-full bg-red-50 p-4">
+            <ShieldCheck className="h-8 w-8 text-red-500" />
+          </div>
+          <p className="text-lg text-slate-800">{error || "No company data found."}</p>
         </div>
       </DashboardShell>
     );
@@ -137,19 +143,48 @@ export default function CompanyProfilePage() {
         <div className="lg:col-span-2 space-y-6">
           
           {/* About Section */}
+         {/* About Section */}
           <div className="rounded-[20px] border border-[#E7EAF1] bg-white p-6 shadow-sm">
             <h3 className="flex items-center gap-2 text-sm font-bold text-[#0F1E35] mb-4">
               <Info className="h-4 w-4 text-blue-500" /> About Company
             </h3>
-            {company?.about || company?.about_company || company?.description ? (
+            {/* 🚀 Checking 'about_company' key from DB */}
+            {company?.about_company || company?.about ? (
               <p className="text-sm leading-relaxed text-slate-600 whitespace-pre-wrap">
-                {company.about || company.about_company || company.description}
+                {company.about_company || company.about}
               </p>
             ) : (
               <p className="text-sm italic text-slate-400">No description provided for this company.</p>
             )}
           </div>
 
+          {/* Location Section */}
+          <div className="rounded-[20px] border border-[#E7EAF1] bg-white p-6 shadow-sm">
+            <h3 className="flex items-center gap-2 text-sm font-bold text-[#0F1E35] mb-6">
+              <MapPin className="h-4 w-4 text-emerald-500" /> Headquarters / Office Location
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Office Address</p>
+                {/* 🚀 Checking 'company_address' key from DB */}
+                <p className="text-sm font-semibold text-[#0F1E35]">{company?.company_address || "—"}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">City</p>
+                <p className="text-sm font-semibold text-[#0F1E35]">{company?.city || "—"}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">State / Province</p>
+                <p className="text-sm font-semibold text-[#0F1E35]">{company?.state || "—"}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Country</p>
+                {/* 🚀 Checking 'country' key from DB */}
+                <p className="text-sm font-semibold text-[#0F1E35]">{company?.country || "—"}</p>
+              </div>
+            </div>
+          </div>
           {/* Location Section */}
           <div className="rounded-[20px] border border-[#E7EAF1] bg-white p-6 shadow-sm">
             <h3 className="flex items-center gap-2 text-sm font-bold text-[#0F1E35] mb-6">
