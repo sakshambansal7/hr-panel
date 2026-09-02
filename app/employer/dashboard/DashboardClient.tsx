@@ -145,14 +145,15 @@ export default function DashboardClient() {
         </div>
       </div>
 
-      {/* 2. TOP STAT CARDS - Changed to grid-cols-5 to fit the 5 remaining cards perfectly */}
+      {/* 2. TOP STAT CARDS */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
         {[
           { label: "Total Jobs", val: stats.total_jobs || 0, sub: "All Jobs", icon: Briefcase, color: "text-blue-600", bg: "bg-blue-50", link: "/employer/dashboard/jobs" },
           { label: "Active Vacancies", val: stats.active_jobs || 0, sub: "Open Positions", icon: CheckCircle, color: "text-emerald-600", bg: "bg-emerald-50", link: "/employer/dashboard/jobs?status=active" },
           { label: "Total Applications", val: stats.total_applications || 0, sub: "All Time", icon: FileText, color: "text-blue-600", bg: "bg-blue-50", link: "/employer/dashboard/applications" },
-          { label: "Interviews", val: stats.upcoming_interviews || 0, sub: "Upcoming", icon: Calendar, color: "text-orange-500", bg: "bg-orange-50", link: "/employer/dashboard/interviews" },
-          { label: "Hires", val: stats.selected || 0, sub: "Total Selected", icon: CheckCircle, color: "text-emerald-600", bg: "bg-emerald-50", link: "/employer/dashboard/candidates?status=selected" },
+          // 🚀 FIXED: Using stats.shortlisted and redirecting to the /shortlisted page
+          { label: "Shortlisted", val: stats.shortlisted || stats.total_shortlisted || 0, sub: "Candidates", icon: Calendar, color: "text-purple-600", bg: "bg-purple-50", link: "/employer/dashboard/shortlisted" },
+          { label: "Hires", val: stats.selected || 0, sub: "Total Selected", icon: CheckCircle, color: "text-emerald-600", bg: "bg-emerald-50", link: "javascript:void(0)" },
         ].map((stat, i) => (
           <Link href={stat.link} key={i} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:border-blue-300 hover:shadow-md transition-all group cursor-pointer">
             <div className="flex items-center gap-3 mb-3">
@@ -170,57 +171,80 @@ export default function DashboardClient() {
       </div>
 
       {/* 3. MY POSTED JOBS (Full-Width Table) */}
-      <div className="mb-8 rounded-2xl border border-slate-200 bg-white shadow-sm flex flex-col">
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-          <h2 className="text-base font-bold text-slate-900">My Posted Jobs</h2>
-          <Link href="/employer/dashboard/jobs" className="text-xs font-semibold text-blue-600 hover:underline">
-            Manage Jobs
+      <div className="mb-8 rounded-[24px] border border-slate-200/80 bg-white shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <div>
+            <h2 className="text-base font-extrabold text-[#0F1E35]">My Posted Jobs</h2>
+            <p className="text-xs font-medium text-slate-500 mt-0.5">Active listings and applicant metrics for your organization.</p>
+          </div>
+          <Link href="/employer/dashboard/jobs" className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors">
+            Manage Jobs &rarr;
           </Link>
         </div>
-        <div className="p-0 overflow-x-auto">
+        
+        <div className="overflow-x-auto">
           <table className="w-full text-left text-sm whitespace-nowrap">
-            <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-semibold">
+            <thead className="bg-slate-50/80 text-slate-400 text-[10px] uppercase font-black tracking-widest border-b border-slate-100">
               <tr>
-                <th className="px-6 py-4 rounded-tl-lg">Rank / Position</th>
-                <th className="px-6 py-4">Department</th>
-                <th className="px-6 py-4 text-center">Total Applications</th>
-                <th className="px-6 py-4 rounded-tr-lg">Status</th>
+                <th className="px-6 py-3.5">Rank / Position</th>
+                <th className="px-6 py-3.5">Department</th>
+                <th className="px-6 py-3.5 text-center">Total Applications</th>
+                <th className="px-6 py-3.5">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 bg-white font-medium">
               {recentJobs.length === 0 ? (
-                <tr><td colSpan={4} className="text-center py-8 text-slate-500">No jobs posted yet.</td></tr>
+                <tr>
+                  <td colSpan={4} className="text-center py-12 text-slate-400 font-semibold">
+                    No jobs posted yet.
+                  </td>
+                </tr>
               ) : (
-                recentJobs.map((job) => (
-                  <tr 
-                    key={job.job_id} 
-                    onClick={() => router.push(`/employer/dashboard/jobs/${job.job_id}`)}
-                    className="hover:bg-slate-50 transition-colors cursor-pointer"
-                  >
-                    <td className="px-6 py-5 font-bold text-blue-600 hover:underline">
-                      {formatText(job.rank)}
-                    </td>
-                    <td className="px-6 py-5 text-slate-500 font-medium">
-                      {formatText(job.department)}
-                    </td>
-                    <td className="px-6 py-5 text-center font-bold text-slate-700">
-                      {job.application_count || 0}
-                    </td>
-                    <td className="px-6 py-5">
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${job.status === 'active' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${job.status === 'active' ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
-                        {formatText(job.status)}
-                      </span>
-                    </td>
-                  </tr>
-                ))
+                recentJobs.map((job) => {
+                  const isActive = job.status?.toLowerCase() === 'active';
+                  
+                  return (
+                    <tr 
+                      key={job.job_id} 
+                      onClick={() => router.push(`/employer/dashboard/jobs/${job.job_id}`)}
+                      className="group hover:bg-blue-50/40 transition-colors cursor-pointer"
+                    >
+                      <td className="px-6 py-4">
+                        <span className="font-extrabold text-[#0F1E35] group-hover:text-blue-600 transition-colors text-base">
+                          {formatText(job.rank)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-slate-600 text-xs font-bold">
+                        <span className="bg-slate-100 px-2.5 py-1 rounded-md">
+                          {formatText(job.department)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 text-xs font-black border border-blue-100">
+                          {job.application_count || 0}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border shadow-sm ${
+                          isActive 
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                            : 'bg-slate-100 text-slate-600 border-slate-200'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                          {formatText(job.status || 'Active')}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
-        <div className="p-4 border-t border-slate-100 mt-auto bg-slate-50/50 rounded-b-2xl">
-          <Link href="/employer/dashboard/jobs" className="text-sm font-semibold text-blue-600 hover:underline flex items-center justify-center gap-1">
-            View All Jobs <TrendingUp className="w-4 h-4" />
+
+        <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-center">
+          <Link href="/employer/dashboard/jobs" className="text-xs font-bold text-slate-600 hover:text-blue-600 transition-colors flex items-center gap-1">
+            View All Jobs &rarr;
           </Link>
         </div>
       </div>

@@ -88,9 +88,9 @@ export default function PostJobPage() {
         // Tries standard mounting points based on your router file
         let res;
         try {
-          res = await api.get("/filters/matrix");
+          res = await api.get("/filters");
         } catch {
-          res = await api.get("/matrix");
+          res = await api.get("/filters");
         }
 
         const data = res.data?.data || res.data;
@@ -213,7 +213,7 @@ export default function PostJobPage() {
         <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
           <div className="space-y-6">
             <SectionCard title="Job Details">
-              <Field label="Job Title (Internal)">
+              <Field label="Job info (Internal)">
                 <input
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
