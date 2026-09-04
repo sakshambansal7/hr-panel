@@ -1,17 +1,18 @@
+// app/login/page.tsx (or your employer login component path)
+
 "use client";
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
 import api from "../lib/api"; 
-import { useAuth } from "../context/auth-context"; // 🚀 Imported useAuth
+import { useAuth } from "../context/auth-context";
 
 export default function LoginForm() {
   const searchParams = useSearchParams();
   const initialRole = searchParams.get("role") === "seeker" ? "seeker" : "employer";
 
   const router = useRouter();
-  // 🚀 Destructured setSessionUser from your context
   const { setSessionUser } = useAuth(); 
 
   const [role, setRole] = useState<"employer" | "seeker">(initialRole);
@@ -27,7 +28,6 @@ export default function LoginForm() {
     }
   }, [role]);
 
-  // 🚀 FIXED: Added <HTMLFormElement> to resolve the TypeScript deprecation warning
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
@@ -42,17 +42,13 @@ export default function LoginForm() {
 
       if (response.data?.success || response.status === 200) {
         const token = response.data?.data?.accessToken || response.data?.accessToken;
-        
-        // Ensure we have a fallback user object if the backend doesn't send one explicitly
         const userData = response.data?.data?.user || response.data?.user || { name: email, email: email, role: "employer" };
         
         if (token) {
-          // 🚀 FIXED: Set the user in live React context so the dashboard doesn't kick us out!
           setSessionUser(userData, token);
         }
         
         const next = searchParams.get("next");
-        // 🚀 FIXED: Smooth client-side routing instead of a hard reload
         router.push(next || "/employer/dashboard");
       }
     } catch (err: any) {
@@ -61,11 +57,6 @@ export default function LoginForm() {
       setIsLoading(false);
     }
   }
-
-  const fillDemoCredentials = () => {
-    setEmail("hr@vships.com");
-    setPassword("Employer@123");
-  };
 
   return (
     <div className="flex min-h-screen w-full flex-col lg:flex-row bg-[#F8FAFC] font-sans antialiased selection:bg-[#FBBF24]/30">
@@ -148,8 +139,6 @@ export default function LoginForm() {
             </p>
           </div>
 
-          
-
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-700 tracking-wide uppercase">
@@ -177,9 +166,13 @@ export default function LoginForm() {
                 <label className="text-xs font-semibold text-slate-700 tracking-wide uppercase">
                   Password
                 </label>
-                <a href="#" className="text-xs font-medium text-slate-500 hover:text-[#0F172A] hover:underline">
-                  Forgot Password?
-                </a>
+                {/* 🚀 FIXED: Working Next.js Link pointing to forgot-password flow */}
+                <Link 
+                  href="/forgot-password" 
+                  className="text-xs font-bold text-amber-600 hover:text-amber-700 hover:underline flex items-center gap-0.5"
+                >
+                  Forgot Password? <span className="text-[10px] font-normal">&gt;</span>
+                </Link>
               </div>
               <div className="relative">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
@@ -242,8 +235,6 @@ export default function LoginForm() {
               Create Employer Account
             </Link>
           </p>
-
-         
 
         </div>
       </div>
