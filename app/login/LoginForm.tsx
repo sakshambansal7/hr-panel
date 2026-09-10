@@ -34,7 +34,7 @@ export default function LoginForm() {
     setIsLoading(true);
     
     try {
-      const response = await api.post("/auth/login", {
+      const response = await api.post("/auth/hr/login", {
         email: email.trim(),
         password,
         role: "hr" 

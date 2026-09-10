@@ -58,7 +58,7 @@ export default function JobsClient() {
     const fetchJobs = async () => {
       try {
         setIsLoading(true);
-        const res = await api.get("/hr/jobs?limit=500");
+        const res = await api.get("/hr/jobs?limit=100");
         const jobsData = extractArray(res.data);
         setRawJobs(jobsData);
       } catch (err) {

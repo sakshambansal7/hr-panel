@@ -1,14 +1,9 @@
-// app/employer/dashboard/post-job/page.tsx
-// app/employer/dashboard/post-job/page.tsx
-
-// app/employer/dashboard/post-job/page.tsx
-
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
-import { ArrowLeft, ShieldAlert, Ship, Briefcase, Plus, Trash2, CheckCircle2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ArrowLeft, ShieldAlert, Ship, Briefcase, Plus, Trash2, CheckCircle2, Wand2, Settings2 } from "lucide-react";
 import DashboardShell from "../components/DashboardShell";
 import { useAuth } from "../../../context/auth-context";
 import { getCompanyProfile } from "../../../lib/company-profile-store";
@@ -37,11 +32,13 @@ function formatTitleCase(str: string | null | undefined): string {
   return str.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+// 🚀 UPDATED: Added salary to the interface
 interface PositionEntry {
   id: string;
   department: string;
   rank: string;
   title: string;
+  salary: string;
   requirements: string;
 }
 
@@ -55,13 +52,20 @@ export default function UnifiedPostJobPage() {
   const { user } = useAuth();
   const router = useRouter();
 
+  // 🚀 NEW: Mode Toggle State
+  const [entryMode, setEntryMode] = useState<"smart" | "manual">("smart");
+
   // API Driven States
   const [departmentsList, setDepartmentsList] = useState<any[]>([]);
   const [vesselOptions, setVesselOptions] = useState<string[]>([]);
   const [companyId, setCompanyId] = useState<number>(1);
-  const [isSubmitting, setIsSubmitting] = useState<"draft" | "publish" | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState<"draft" | "publish" | "smart" | null>(null);
 
   const isVerified = useMemo(() => (user ? Boolean(getCompanyProfile(user.email).verified) : false), [user]);
+
+  // 🚀 NEW: Smart Paste States
+  const [rawVacancyText, setRawVacancyText] = useState("");
+  const [smartSuccess, setSmartSuccess] = useState(false);
 
   // Form States
   const [shipType, setShipType] = useState<string>("mainfleet");
@@ -70,11 +74,11 @@ export default function UnifiedPostJobPage() {
   const [itfApproved, setItfApproved] = useState(true);
   const [rpslValid, setRpslValid] = useState(true);
 
-  // 🚀 THE NESTED ARRAY STATE (Matches your screenshot logic)
+  // 🚀 UPDATED: Initialized salary inside the nested array state
   const [vessels, setVessels] = useState<VesselGroup[]>([{
     id: `vessel-${Date.now()}`,
     vesselName: "",
-    positions: [{ id: `pos-${Date.now()}`, department: "", rank: "", title: "", requirements: "" }]
+    positions: [{ id: `pos-${Date.now()}`, department: "", rank: "", title: "", salary: "", requirements: "" }]
   }]);
 
   useEffect(() => {
@@ -111,11 +115,10 @@ export default function UnifiedPostJobPage() {
   // --- UI LOGIC HANDLERS ---
   const handleShipTypeChange = (val: string) => {
     setShipType(val);
-    // Reset form cleanly when ship type changes
     setVessels([{
       id: `vessel-${Date.now()}`,
       vesselName: val === "shore" ? "Shore Operations" : "",
-      positions: [{ id: `pos-${Date.now()}`, department: val === "shore" ? "Shore" : "", rank: "", title: "", requirements: "" }]
+      positions: [{ id: `pos-${Date.now()}`, department: val === "shore" ? "Shore" : "", rank: "", title: "", salary: "", requirements: "" }]
     }]);
   };
 
@@ -123,7 +126,7 @@ export default function UnifiedPostJobPage() {
     setVessels([...vessels, {
       id: `vessel-${Date.now()}`,
       vesselName: "",
-      positions: [{ id: `pos-${Date.now()}`, department: "", rank: "", title: "", requirements: "" }]
+      positions: [{ id: `pos-${Date.now()}`, department: "", rank: "", title: "", salary: "", requirements: "" }]
     }]);
   };
 
@@ -133,7 +136,7 @@ export default function UnifiedPostJobPage() {
 
   const addPosition = (vesselId: string) => {
     setVessels(vessels.map(v => v.id === vesselId ? {
-      ...v, positions: [...v.positions, { id: `pos-${Date.now()}`, department: shipType === "shore" ? "Shore" : "", rank: "", title: "", requirements: "" }]
+      ...v, positions: [...v.positions, { id: `pos-${Date.now()}`, department: shipType === "shore" ? "Shore" : "", rank: "", title: "", salary: "", requirements: "" }]
     } : v));
   };
 
@@ -148,13 +151,33 @@ export default function UnifiedPostJobPage() {
       ...v, positions: v.positions.map(p => {
         if (p.id !== posId) return p;
         const updated = { ...p, [key]: val };
-        // Auto-reset rank and title if department changes
         if (key === "department") { updated.rank = ""; updated.title = ""; }
-        // Auto-fill title if rank changes
         if (key === "rank" && shipType !== "shore") { updated.title = val; }
         return updated;
       })
     } : v));
+  };
+
+  // 🚀 NEW: Smart Paste Submit Logic
+  const handleSmartSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!companyId) return alert("Company Profile not found. Please setup your profile first.");
+    if (!rawVacancyText.trim()) return alert("Please paste your vacancy text.");
+
+    try {
+      setIsSubmitting("smart");
+      setSmartSuccess(false);
+      await api.post("/jobs/smart-post", {
+        company_id: companyId,
+        raw_text: rawVacancyText
+      });
+      setSmartSuccess(true);
+      setRawVacancyText(""); 
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to process vacancy data. The AI might have rejected it as invalid.");
+    } finally {
+      setIsSubmitting(null);
+    }
   };
 
   // --- SUBMIT LOGIC ---
@@ -165,7 +188,6 @@ export default function UnifiedPostJobPage() {
     let totalPositions = 0;
     const jobPayloads: any[] = [];
 
-    // Loop through nested UI to build flat payloads
     for (const vessel of vessels) {
       if (shipType !== "shore" && !vessel.vesselName) return alert("Please select a Vessel Type for all groups.");
       
@@ -190,6 +212,7 @@ export default function UnifiedPostJobPage() {
           contract: contractLength || "TBD",
           requirement_description: commonRequirements || "Standard requirements apply.",
           position_specifics: specifics || "Standard terms.",
+          salary: pos.salary || "Negotiable", // 🚀 UPDATED: Push salary to backend payload
           status: statusOverride || (isVerified ? "active" : "pending")
         });
         totalPositions++;
@@ -200,7 +223,6 @@ export default function UnifiedPostJobPage() {
 
     try {
       setIsSubmitting(statusOverride === "draft" ? "draft" : "publish");
-      // Fire all posts in parallel (Standard API behavior)
       await Promise.all(jobPayloads.map(payload => api.post("/jobs", payload)));
       alert(`Successfully processed ${totalPositions} job position(s)!`);
       router.push("/employer/dashboard/jobs");
@@ -216,176 +238,269 @@ export default function UnifiedPostJobPage() {
 
   return (
     <DashboardShell pageTitle="Post Job Vacancies">
-      <form onSubmit={(e) => handleSubmit(e, "active")} className="space-y-6 max-w-5xl">
+      <div className="space-y-6 max-w-5xl mx-auto">
         
-        {/* Header */}
-        <div className="mb-6 border-b border-[#E7EAF1] pb-5">
-          <span className="text-[11px] font-bold tracking-widest text-slate-500 uppercase block">
-            Recruitment
-          </span>
-          <h1 className="text-2xl font-extrabold tracking-tight text-[#0F1E35] sm:text-3xl">
-            Publish Job Positions
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Add a single vacancy or create bulk positions across multiple vessels.
-          </p>
-        </div>
-
-        {/* --- GLOBAL SETTINGS (Applies to all positions) --- */}
-        <div className="rounded-[20px] border border-[#E7EAF1] bg-white p-6 shadow-[0_1px_2px_rgba(15,30,53,0.04)] space-y-5">
-          <h2 className="text-sm font-bold text-[#0F1E35] uppercase tracking-wide flex items-center gap-2 border-b border-[#E7EAF1] pb-3">
-            <Briefcase className="w-4 h-4 text-[#F5B61A]" /> Global Contract Details
-          </h2>
-          
-          <div className="grid gap-5 sm:grid-cols-2">
-            <div>
-              <label className="text-xs font-semibold text-slate-700 uppercase mb-1.5 block">Ship Type *</label>
-              <select value={shipType} onChange={(e) => handleShipTypeChange(e.target.value)} className={inputClass}>
-                {SHIP_TYPES.map((st) => <option key={st.value} value={st.value}>{st.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-700 uppercase mb-1.5 block">Contract Length</label>
-              <input value={contractLength} onChange={(e) => setContractLength(e.target.value)} placeholder="e.g. 6 Months" className={inputClass} />
-            </div>
-          </div>
-
+        {/* Header & Toggle */}
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-[#E7EAF1] pb-5">
           <div>
-            <label className="text-xs font-semibold text-slate-700 uppercase mb-1.5 block">Common Requirements (Applies to all)</label>
-            <textarea rows={2} value={commonRequirements} onChange={(e) => setCommonRequirements(e.target.value)} placeholder="e.g. US Visa required for all crew, immediate joining..." className={inputClass} />
+            <span className="text-[11px] font-bold tracking-widest text-slate-500 uppercase block mb-1">
+              Recruitment
+            </span>
+            <h1 className="text-2xl font-extrabold tracking-tight text-[#0F1E35] sm:text-3xl">
+              Publish Job Positions
+            </h1>
+            <p className="text-sm text-slate-500 mt-1">
+              Add a single vacancy or create bulk positions across multiple vessels.
+            </p>
           </div>
-
-          <div className="flex gap-6 pt-2">
-            <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer">
-              <input type="checkbox" checked={itfApproved} onChange={(e) => setItfApproved(e.target.checked)} className="h-4 w-4 rounded border-[#E7EAF1] text-[#F5B61A] focus:ring-[#F5B61A]" />
-              ITF Approved
-            </label>
-            <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer">
-              <input type="checkbox" checked={rpslValid} onChange={(e) => setRpslValid(e.target.checked)} className="h-4 w-4 rounded border-[#E7EAF1] text-[#F5B61A] focus:ring-[#F5B61A]" />
-              RPSL Valid
-            </label>
+          
+          <div className="flex bg-slate-100 p-1 rounded-xl w-full sm:w-auto">
+            <button 
+              onClick={() => { setEntryMode("smart"); setSmartSuccess(false); }}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${entryMode === "smart" ? "bg-white text-[#0F1E35] shadow-sm" : "text-slate-500 hover:text-[#0F1E35]"}`}
+            >
+              <Wand2 className="w-4 h-4" /> Smart Paste
+            </button>
+            <button 
+              onClick={() => setEntryMode("manual")}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${entryMode === "manual" ? "bg-white text-[#0F1E35] shadow-sm" : "text-slate-500 hover:text-[#0F1E35]"}`}
+            >
+              <Settings2 className="w-4 h-4" /> Manual Builder
+            </button>
           </div>
         </div>
 
-        {/* --- DYNAMIC VESSEL & POSITIONS SECTION --- */}
-        <div className="space-y-6">
-          <h2 className="text-base font-bold text-[#0F1E35] flex items-center gap-2">
-            Job Positions <span className="text-red-500">*</span>
-          </h2>
+        <AnimatePresence mode="wait">
+          
+          {/* ========================================== */}
+          {/* SMART PASTE MODE */}
+          {/* ========================================== */}
+          {entryMode === "smart" && (
+            <motion.div key="smart" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <div className="rounded-[20px] border border-[#E7EAF1] bg-white p-8 shadow-[0_1px_2px_rgba(15,30,53,0.04)] max-w-3xl mx-auto">
+                <div className="mb-6">
+                  <h2 className="text-xl font-extrabold text-[#0F1E35]">Post your vacancy</h2>
+                  <p className="text-sm text-slate-500 mt-1">
+                    Paste what you send to your WhatsApp groups. Our AI will structure it and queue it for review.
+                  </p>
+                </div>
 
-          {vessels.map((vessel, vIndex) => (
-            <div key={vessel.id} className="rounded-2xl border-l-4 border-l-[#0F1E35] border border-[#E7EAF1] bg-white p-6 shadow-sm space-y-5 animate-in fade-in slide-in-from-bottom-2">
-              
-              {/* Vessel Header */}
-              {showVesselDropdown ? (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E7EAF1] pb-4">
-                  <div className="flex-1 max-w-md">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Vessel Type *</label>
-                    <select required value={vessel.vesselName} onChange={(e) => setVessels(vessels.map(v => v.id === vessel.id ? { ...v, vesselName: e.target.value } : v))} className={inputClass}>
-                      <option value="" disabled>Select Vessel Type...</option>
-                      {vesselOptions.length > 0 
-                        ? vesselOptions.map((opt, i) => <option key={i} value={opt}>{formatTitleCase(opt)}</option>)
-                        : ["Oil Tanker", "Chemical Tanker", "Bulk Carrier"].map(o => <option key={o} value={o}>{o}</option>)
-                      }
-                    </select>
+                <form onSubmit={handleSmartSubmit} className="space-y-6">
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 uppercase mb-2 block">Your Vacancy Dump</label>
+                    <textarea 
+                      required
+                      rows={8}
+                      value={rawVacancyText}
+                      onChange={(e) => setRawVacancyText(e.target.value)}
+                      placeholder="e.g.&#10;URGENT REQUIREMENT: Need one 2nd Engineer for our Oil/Chem Tanker. Joining around 20th August, standard 6 months contract..."
+                      className="w-full rounded-xl border border-[#E7EAF1] bg-slate-50 p-4 text-sm text-[#0F1E35] placeholder:text-slate-400 focus:border-[#F5B61A] focus:bg-white focus:outline-none transition-colors"
+                    />
                   </div>
-                  {vessels.length > 1 && (
-                    <button type="button" onClick={() => removeVessel(vessel.id)} className="text-xs font-bold text-red-500 hover:text-red-700 flex items-center gap-1">
-                      <Trash2 className="w-3.5 h-3.5" /> Remove Group
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="border-b border-[#E7EAF1] pb-3">
-                  <span className="font-bold text-xs uppercase text-slate-500 tracking-wider">Shore / Facility Category</span>
-                </div>
-              )}
 
-              {/* Positions List */}
-              <div className="space-y-4">
-                <p className="text-xs font-bold text-[#0F1E35] uppercase tracking-wide">Positions in this group:</p>
-                
-                {vessel.positions.map((pos, pIndex) => (
-                  <div key={pos.id} className="relative bg-[#F8FAFC] p-5 rounded-xl border border-[#E7EAF1] space-y-4">
-                    {vessel.positions.length > 1 && (
-                      <button type="button" onClick={() => removePosition(vessel.id, pos.id)} className="absolute top-4 right-4 text-red-400 hover:text-red-600">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 uppercase mb-2 block">Company Auth Email</label>
+                    <input 
+                      type="email" 
+                      disabled
+                      value={user?.email || ""}
+                      className="w-full rounded-xl border border-[#E7EAF1] bg-slate-100 py-3 px-4 text-sm text-slate-500 font-medium cursor-not-allowed"
+                    />
+                  </div>
 
-                    <div className="grid gap-4 sm:grid-cols-3 pr-6 sm:pr-0">
+                  <button 
+                    type="submit" 
+                    disabled={isSubmitting === "smart" || !rawVacancyText.trim()}
+                    className="w-full rounded-xl bg-[#0F1E35] py-3.5 text-sm font-bold text-white hover:bg-slate-800 transition-colors disabled:opacity-50"
+                  >
+                    {isSubmitting === "smart" ? "Processing via AI..." : "Post vacancy"}
+                  </button>
+
+                  {smartSuccess && (
+                    <div className="mt-4 flex items-start gap-3 rounded-xl bg-emerald-50 p-4 border border-emerald-100">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                       <div>
-                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 block">Department *</label>
-                        {shipType === "shore" ? (
-                          <input type="text" value="Shore" disabled className="w-full rounded-xl border border-[#E7EAF1] bg-slate-100 py-2.5 px-4 text-sm text-slate-500 font-bold" />
-                        ) : (
-                          <select required value={pos.department} onChange={(e) => updatePosition(vessel.id, pos.id, "department", e.target.value)} className={inputClass}>
-                            <option value="" disabled>Select Dept...</option>
-                            {departmentsList.length > 0 
-                              ? departmentsList.map((d: any, i) => <option key={i} value={d.name || d}>{formatTitleCase(d.name || d)}</option>)
-                              : FALLBACK_DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)
-                            }
-                          </select>
-                        )}
-                      </div>
-
-                      {shipType !== "shore" && (
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 block">Rank *</label>
-                          <select required value={pos.rank} onChange={(e) => updatePosition(vessel.id, pos.id, "rank", e.target.value)} className={inputClass} disabled={!pos.department}>
-                            <option value="" disabled>{pos.department ? "Select Rank..." : "Select Dept First"}</option>
-                            {(RANKS_BY_DEPT[pos.department] || []).map(r => <option key={r} value={r}>{r}</option>)}
-                          </select>
-                        </div>
-                      )}
-
-                      <div className={shipType === "shore" ? "sm:col-span-2" : ""}>
-                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 block">Position Title *</label>
-                        <input required type="text" value={pos.title} onChange={(e) => updatePosition(vessel.id, pos.id, "title", e.target.value)} placeholder={shipType === "shore" ? "e.g. Marine Superintendent" : "Auto-fills from Rank"} className={inputClass} />
+                        <p className="text-sm font-bold text-emerald-800">Received successfully.</p>
+                        <p className="text-xs text-emerald-600 mt-1">We are checking it via our AI gateway before it goes live, usually within a few hours.</p>
                       </div>
                     </div>
+                  )}
+                </form>
+              </div>
+            </motion.div>
+          )}
 
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 block">Position Specific Requirements (Optional)</label>
-                      <input type="text" value={pos.requirements} onChange={(e) => updatePosition(vessel.id, pos.id, "requirements", e.target.value)} placeholder="e.g. Needs DP Maintenance certificate..." className={inputClass} />
+          {/* ========================================== */}
+          {/* MANUAL BUILDER MODE (YOUR EXACT CODE) */}
+          {/* ========================================== */}
+          {entryMode === "manual" && (
+            <motion.form key="manual" onSubmit={(e) => handleSubmit(e, "active")} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6 max-w-5xl">
+              
+              {/* --- GLOBAL SETTINGS (Applies to all positions) --- */}
+              <div className="rounded-[20px] border border-[#E7EAF1] bg-white p-6 shadow-[0_1px_2px_rgba(15,30,53,0.04)] space-y-5">
+                <h2 className="text-sm font-bold text-[#0F1E35] uppercase tracking-wide flex items-center gap-2 border-b border-[#E7EAF1] pb-3">
+                  <Briefcase className="w-4 h-4 text-[#F5B61A]" /> Global Contract Details
+                </h2>
+                
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 uppercase mb-1.5 block">Ship Type *</label>
+                    <select value={shipType} onChange={(e) => handleShipTypeChange(e.target.value)} className={inputClass}>
+                      {SHIP_TYPES.map((st) => <option key={st.value} value={st.value}>{st.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 uppercase mb-1.5 block">Contract Length</label>
+                    <input value={contractLength} onChange={(e) => setContractLength(e.target.value)} placeholder="e.g. 6 Months" className={inputClass} />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 uppercase mb-1.5 block">Common Requirements (Applies to all)</label>
+                  <textarea rows={2} value={commonRequirements} onChange={(e) => setCommonRequirements(e.target.value)} placeholder="e.g. US Visa required for all crew, immediate joining..." className={inputClass} />
+                </div>
+
+                <div className="flex gap-6 pt-2">
+                  <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer">
+                    <input type="checkbox" checked={itfApproved} onChange={(e) => setItfApproved(e.target.checked)} className="h-4 w-4 rounded border-[#E7EAF1] text-[#F5B61A] focus:ring-[#F5B61A]" />
+                    ITF Approved
+                  </label>
+                  <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer">
+                    <input type="checkbox" checked={rpslValid} onChange={(e) => setRpslValid(e.target.checked)} className="h-4 w-4 rounded border-[#E7EAF1] text-[#F5B61A] focus:ring-[#F5B61A]" />
+                    RPSL Valid
+                  </label>
+                </div>
+              </div>
+
+              {/* --- DYNAMIC VESSEL & POSITIONS SECTION --- */}
+              <div className="space-y-6">
+                <h2 className="text-base font-bold text-[#0F1E35] flex items-center gap-2">
+                  Job Positions <span className="text-red-500">*</span>
+                </h2>
+
+                {vessels.map((vessel, vIndex) => (
+                  <div key={vessel.id} className="rounded-2xl border-l-4 border-l-[#0F1E35] border border-[#E7EAF1] bg-white p-6 shadow-sm space-y-5 animate-in fade-in slide-in-from-bottom-2">
+                    
+                    {/* Vessel Header */}
+                    {showVesselDropdown ? (
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E7EAF1] pb-4">
+                        <div className="flex-1 max-w-md">
+                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Vessel Type *</label>
+                          <select required value={vessel.vesselName} onChange={(e) => setVessels(vessels.map(v => v.id === vessel.id ? { ...v, vesselName: e.target.value } : v))} className={inputClass}>
+                            <option value="" disabled>Select Vessel Type...</option>
+                            {vesselOptions.length > 0 
+                              ? vesselOptions.map((opt, i) => <option key={i} value={opt}>{formatTitleCase(opt)}</option>)
+                              : ["Oil Tanker", "Chemical Tanker", "Bulk Carrier"].map(o => <option key={o} value={o}>{o}</option>)
+                            }
+                          </select>
+                        </div>
+                        {vessels.length > 1 && (
+                          <button type="button" onClick={() => removeVessel(vessel.id)} className="text-xs font-bold text-red-500 hover:text-red-700 flex items-center gap-1">
+                            <Trash2 className="w-3.5 h-3.5" /> Remove Group
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="border-b border-[#E7EAF1] pb-3">
+                        <span className="font-bold text-xs uppercase text-slate-500 tracking-wider">Shore / Facility Category</span>
+                      </div>
+                    )}
+
+                    {/* Positions List */}
+                    <div className="space-y-4">
+                      <p className="text-xs font-bold text-[#0F1E35] uppercase tracking-wide">Positions in this group:</p>
+                      
+                      {vessel.positions.map((pos, pIndex) => (
+                        <div key={pos.id} className="relative bg-[#F8FAFC] p-5 rounded-xl border border-[#E7EAF1] space-y-4">
+                          {vessel.positions.length > 1 && (
+                            <button type="button" onClick={() => removePosition(vessel.id, pos.id)} className="absolute top-4 right-4 text-red-400 hover:text-red-600">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+
+                          <div className="grid gap-4 sm:grid-cols-3 pr-6 sm:pr-0">
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 block">Department *</label>
+                              {shipType === "shore" ? (
+                                <input type="text" value="Shore" disabled className="w-full rounded-xl border border-[#E7EAF1] bg-slate-100 py-2.5 px-4 text-sm text-slate-500 font-bold" />
+                              ) : (
+                                <select required value={pos.department} onChange={(e) => updatePosition(vessel.id, pos.id, "department", e.target.value)} className={inputClass}>
+                                  <option value="" disabled>Select Dept...</option>
+                                  {departmentsList.length > 0 
+                                    ? departmentsList.map((d: any, i) => <option key={i} value={d.name || d}>{formatTitleCase(d.name || d)}</option>)
+                                    : FALLBACK_DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)
+                                  }
+                                </select>
+                              )}
+                            </div>
+
+                            {shipType !== "shore" && (
+                              <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 block">Rank *</label>
+                                <select required value={pos.rank} onChange={(e) => updatePosition(vessel.id, pos.id, "rank", e.target.value)} className={inputClass} disabled={!pos.department}>
+                                  <option value="" disabled>{pos.department ? "Select Rank..." : "Select Dept First"}</option>
+                                  {(RANKS_BY_DEPT[pos.department] || []).map(r => <option key={r} value={r}>{r}</option>)}
+                                </select>
+                              </div>
+                            )}
+
+                            <div className={shipType === "shore" ? "sm:col-span-2" : ""}>
+                              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 block">Position Title *</label>
+                              <input required type="text" value={pos.title} onChange={(e) => updatePosition(vessel.id, pos.id, "title", e.target.value)} placeholder={shipType === "shore" ? "e.g. Marine Superintendent" : "Auto-fills from Rank"} className={inputClass} />
+                            </div>
+                          </div>
+
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 block">Salary Range (Optional)</label>
+                              <input type="text" value={pos.salary} onChange={(e) => updatePosition(vessel.id, pos.id, "salary", e.target.value)} placeholder="e.g., $3000 - $5000" className={inputClass} />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 block">Specific Requirements (Optional)</label>
+                              <input type="text" value={pos.requirements} onChange={(e) => updatePosition(vessel.id, pos.id, "requirements", e.target.value)} placeholder="e.g. Needs DP Maintenance cert..." className={inputClass} />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+
+                      <button type="button" onClick={() => addPosition(vessel.id)} className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-[#0F1E35]/30 bg-blue-50/50 px-5 py-2.5 text-xs font-bold text-[#0F1E35] hover:bg-blue-50 transition-colors">
+                        <Plus className="w-3.5 h-3.5" /> Add Position
+                      </button>
                     </div>
                   </div>
                 ))}
 
-                <button type="button" onClick={() => addPosition(vessel.id)} className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-[#0F1E35]/30 bg-blue-50/50 px-5 py-2.5 text-xs font-bold text-[#0F1E35] hover:bg-blue-50 transition-colors">
-                  <Plus className="w-3.5 h-3.5" /> Add Position
-                </button>
+                {showVesselDropdown && (
+                  <div className="flex justify-center pt-2">
+                    <button type="button" onClick={addVessel} className="inline-flex items-center gap-2 rounded-xl border-2 border-[#0F1E35] bg-white px-6 py-3 text-sm font-bold text-[#0F1E35] hover:bg-[#0F1E35] hover:text-white transition-all shadow-sm">
+                      <Ship className="w-4 h-4" /> Add Another Vessel Group
+                    </button>
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
 
-          {showVesselDropdown && (
-            <div className="flex justify-center pt-2">
-              <button type="button" onClick={addVessel} className="inline-flex items-center gap-2 rounded-xl border-2 border-[#0F1E35] bg-white px-6 py-3 text-sm font-bold text-[#0F1E35] hover:bg-[#0F1E35] hover:text-white transition-all shadow-sm">
-                <Ship className="w-4 h-4" /> Add Another Vessel Group
-              </button>
-            </div>
+              {/* --- SUBMIT FOOTER --- */}
+              <div className="sticky bottom-0 z-10 flex items-center justify-between rounded-t-2xl border-t border-[#E7EAF1] bg-white/80 backdrop-blur-md p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] mt-10">
+                <div className="hidden sm:block">
+                  <p className="text-xs font-bold text-slate-500">Ready to publish</p>
+                  <p className="text-sm font-extrabold text-[#0F1E35]"><span className="text-[#F5B61A]">{totalPositionsCount}</span> Position(s)</p>
+                </div>
+                
+                <div className="flex w-full sm:w-auto gap-3">
+                  <button type="button" onClick={(e) => handleSubmit(e, "draft")} disabled={isSubmitting !== null} className="flex-1 sm:flex-none rounded-xl border border-[#E7EAF1] bg-white px-6 py-3 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">
+                    {isSubmitting === "draft" ? "Saving..." : "Save Draft"}
+                  </button>
+                  <button type="submit" disabled={isSubmitting !== null} className="flex-1 sm:flex-none rounded-xl bg-[#F5B61A] px-8 py-3 text-sm font-bold text-[#0F1E35] shadow-lg shadow-[#F5B61A]/20 hover:brightness-95 transition-all disabled:opacity-50">
+                    {isSubmitting === "publish" ? "Publishing..." : "Publish Jobs"}
+                  </button>
+                </div>
+              </div>
+
+            </motion.form>
           )}
-        </div>
 
-        {/* --- SUBMIT FOOTER --- */}
-        <div className="sticky bottom-0 z-10 flex items-center justify-between rounded-t-2xl border-t border-[#E7EAF1] bg-white/80 backdrop-blur-md p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] mt-10">
-          <div className="hidden sm:block">
-            <p className="text-xs font-bold text-slate-500">Ready to publish</p>
-            <p className="text-sm font-extrabold text-[#0F1E35]"><span className="text-[#F5B61A]">{totalPositionsCount}</span> Position(s)</p>
-          </div>
-          
-          <div className="flex w-full sm:w-auto gap-3">
-            <button type="button" onClick={(e) => handleSubmit(e, "draft")} disabled={isSubmitting !== null} className="flex-1 sm:flex-none rounded-xl border border-[#E7EAF1] bg-white px-6 py-3 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">
-              {isSubmitting === "draft" ? "Saving..." : "Save Draft"}
-            </button>
-            <button type="submit" disabled={isSubmitting !== null} className="flex-1 sm:flex-none rounded-xl bg-[#F5B61A] px-8 py-3 text-sm font-bold text-[#0F1E35] shadow-lg shadow-[#F5B61A]/20 hover:brightness-95 transition-all disabled:opacity-50">
-              {isSubmitting === "publish" ? "Publishing..." : "Publish Jobs"}
-            </button>
-          </div>
-        </div>
-
-      </form>
+        </AnimatePresence>
+      </div>
     </DashboardShell>
   );
 }
