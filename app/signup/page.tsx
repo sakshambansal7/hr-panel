@@ -375,19 +375,20 @@ function SignupFormContent() {
                 
                 <div className="sm:col-span-2 relative z-50">
                   <Field label="Search Your Company" required>
-                    <SearchableSelect 
-                      options={availableCompanies.map(comp => comp.name)}
-                      value={availableCompanies.find(c => c.id.toString() === selectedCompanyId)?.name || ""}
-                      onChange={(selectedName: string) => {
-                        if (!selectedName) {
-                          setSelectedCompanyId("");
-                          return;
-                        }
-                        const comp = availableCompanies.find(c => c.name === selectedName);
-                        setSelectedCompanyId(comp ? comp.id.toString() : "");
-                      }} 
-                      placeholder="-- Type to search your registered organization --"
-                    />
+                   <SearchableSelect 
+                    options={availableCompanies.map(comp => comp.name)}
+                    value={availableCompanies.find(c => String(c.id) === String(selectedCompanyId))?.name || ""}
+                    onChange={(selectedName: string) => {
+                      if (!selectedName) {
+                        setSelectedCompanyId("");
+                        return;
+                      }
+                      const comp = availableCompanies.find(c => c.name === selectedName);
+                      console.log("🏢 Selected Company Object:", comp); // Debug log
+                      setSelectedCompanyId(comp ? String(comp.id) : "");
+                    }} 
+                    placeholder="-- Type to search your registered organization --"
+                  />
                   </Field>
                 </div>
 
@@ -455,7 +456,7 @@ function SignupFormContent() {
               disabled={!emailVerified}
               className="group relative flex w-full items-center justify-center gap-2 rounded-2xl bg-[#FBBF24] py-4 text-sm font-bold text-[#0F172A] shadow-lg shadow-amber-500/10 transition-all duration-300 hover:bg-[#FCD34D] hover:shadow-xl hover:shadow-amber-500/20 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Create Account & Go to Dashboard
+               Go to Dashboard
               <span className="transition-transform duration-200 group-hover:translate-x-1">→</span>
             </button>
           </form>
