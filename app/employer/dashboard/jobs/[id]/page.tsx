@@ -4,7 +4,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation"; // 🚀 Imported useSearchParams
 import { ArrowLeft, Mail, Phone, Filter, Zap, Users, ShieldCheck, MapPin, Briefcase, FileText, Calendar, Loader2 } from "lucide-react";
 import DashboardShell from "../../components/DashboardShell";
 import api from "../../../../lib/api";
@@ -44,12 +44,17 @@ function extractArray(resData: any): any[] {
 
 export default function JobATSPage() {
   const params = useParams();
+  const searchParams = useSearchParams(); // 🚀 To get ?highlight= parameter
   const jobId = params?.id as string;
+  const highlightId = searchParams?.get("highlight"); // 🚀 Extracting highlight id
   
   const [job, setJob] = useState<any>(null);
   const [applications, setApplications] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("");
+  
+  // 🚀 State to track which row is currently highlighted
+  const [highlightedAppId, setHighlightedAppId] = useState<string | null>(null);
 
   const fetchWorkspaceData = useCallback(async () => {
     if (!jobId) return;
@@ -85,6 +90,26 @@ export default function JobATSPage() {
     fetchWorkspaceData();
   }, [fetchWorkspaceData]);
 
+  // 🚀 Logic to auto-scroll to the highlighted application and remove highlight after 2.5s
+  useEffect(() => {
+    if (highlightId && applications.length > 0 && !isLoading) {
+      setHighlightedAppId(highlightId);
+      
+      setTimeout(() => {
+        const rowElement = document.getElementById(`app-row-${highlightId}`);
+        if (rowElement) {
+          rowElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100); // slight delay to ensure DOM is fully rendered
+
+      const timer = setTimeout(() => {
+        setHighlightedAppId(null);
+      }, 2500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [highlightId, applications.length, isLoading]);
+
   const jobStatus = job?.job_status?.toLowerCase() === "closed" ? "closed" : "active";
   const specs = job?.position_specifics || "";
   const titleMatch = specs.match(/Title:\s([^|]+)/);
@@ -97,7 +122,6 @@ export default function JobATSPage() {
   return (
     <DashboardShell pageTitle={`ATS: ${jobTitle}`}>
       
-      {/* --- PAGE HEADER --- */}
       <div className="mb-6">
         <Link href="/employer/dashboard/jobs" className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-[#0F1E35] transition-colors mb-4">
           <ArrowLeft className="h-4 w-4" /> Back to Jobs
@@ -210,7 +234,15 @@ export default function JobATSPage() {
                   const currentStatus = app.status?.toLowerCase() || 'applied';
                   
                   return (
-                    <tr key={app.application_id || app.id} className="group transition-colors hover:bg-blue-50/30">
+                    <tr 
+                      key={app.application_id || app.id} 
+                      id={`app-row-${app.application_id || app.id}`} // 🚀 ID required for scrolling
+                      className={`group transition-all duration-700 ${
+                        highlightedAppId === String(app.application_id || app.id) 
+                          ? 'bg-amber-100/60 shadow-inner' // 🚀 The Highlight styling
+                          : 'hover:bg-blue-50/30'
+                      }`}
+                    >
                       <td className="px-6 py-4">
                         <p className="font-bold text-[#0F1E35] text-base mb-1">{formatTitleCase(app.candidate_name)}</p>
                         <Link href={`/employer/dashboard/candidates/${app.candidate_id || app.user_id}`} className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-blue-600 hover:text-blue-800 transition-colors bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
@@ -231,7 +263,6 @@ export default function JobATSPage() {
                         {new Date(app.applied_at || app.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
                       </td>
                       <td className="px-6 py-4 text-right">
-                        {/* 🚀 CHANGED: Now a beautiful read-only badge instead of a dropdown */}
                         <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border shadow-sm ${STATUS_COLORS[currentStatus] || STATUS_COLORS.applied}`}>
                           <span className={`h-1.5 w-1.5 rounded-full ${DOT_COLORS[currentStatus] || DOT_COLORS.applied}`} />
                           {currentStatus}

@@ -3,7 +3,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { 
   CirclePlus, Search, FileText, Calendar, 
@@ -12,8 +12,6 @@ import {
 } from "lucide-react";
 import DashboardShell from "../components/DashboardShell";
 import api from "../../../lib/api";
-
-
 
 const STATUS_LABELS: Record<string, string> = {
   active: "Live",
@@ -35,17 +33,102 @@ function formatTitleCase(str: string | null | undefined): string {
 function extractArray(payload: any): any[] {
   if (!payload) return [];
   if (Array.isArray(payload)) return payload;
+  if (payload.items && Array.isArray(payload.items)) return payload.items; 
   if (payload.data && Array.isArray(payload.data)) return payload.data;
   if (payload.data?.data && Array.isArray(payload.data.data)) return payload.data.data;
   if (payload.data?.items && Array.isArray(payload.data.items)) return payload.data.items;
   return [];
 }
 
+// 🚀 SEARCHABLE SELECT COMPONENT TO PREVENT MISSPELLINGS
+function SearchableSelect({
+  options, value, onChange, placeholder, icon: Icon
+}: {
+  options: { label: string; value: string }[];
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  icon?: any;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const filteredOptions = options.filter((opt) =>
+    opt.label.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const selectedOption = options.find((opt) => opt.value === value);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) setIsOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div className="relative w-full sm:w-auto min-w-[200px]" ref={dropdownRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full text-left rounded-xl border border-[#E7EAF1] bg-white px-4 py-2 pl-9 pr-8 text-xs font-bold flex items-center justify-between focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-sm"
+      >
+        {Icon && <Icon className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />}
+        <span className={`truncate ${selectedOption ? "text-slate-600" : "text-slate-500 font-medium"}`}>
+          {selectedOption ? selectedOption.label : placeholder}
+        </span>
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">▼</span>
+      </button>
+
+      {isOpen && (
+        <div className="absolute z-50 mt-2 w-full rounded-xl border border-slate-200 bg-white shadow-xl overflow-hidden flex flex-col max-h-64">
+          <div className="p-2 border-b border-slate-100 bg-slate-50 shrink-0">
+            <input 
+              type="text" 
+              value={search} 
+              onChange={(e) => setSearch(e.target.value)} 
+              placeholder="Type to search..." 
+              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500 shadow-sm" 
+              autoFocus 
+            />
+          </div>
+          <div className="overflow-y-auto flex-1 py-1">
+            <button 
+              type="button" 
+              onClick={() => { onChange("all"); setIsOpen(false); setSearch(""); }} 
+              className={`w-full text-left px-4 py-2.5 text-xs transition-colors hover:bg-blue-50 ${value === "all" ? "bg-blue-50 font-bold text-blue-900" : "font-semibold text-slate-700"}`}
+            >
+              All Options
+            </button>
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((opt) => (
+                <button 
+                  key={opt.value} 
+                  type="button" 
+                  onClick={() => { onChange(opt.value); setIsOpen(false); setSearch(""); }} 
+                  className={`w-full text-left px-4 py-2.5 text-xs transition-colors hover:bg-blue-50 ${value === opt.value ? "bg-blue-50 font-bold text-blue-900" : "font-semibold text-slate-700"}`}
+                >
+                  {opt.label}
+                </button>
+              ))
+            ) : (
+              <div className="p-4 text-xs text-center text-slate-400 font-medium">No matches found</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 export default function JobsClient() {
   const [tab, setTab] = useState<string>("all");
   const [query, setQuery] = useState("");
   
-  // New Filter States
+  // Filter States
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
   const [rankFilter, setRankFilter] = useState<string>("all");
   const [vesselFilter, setVesselFilter] = useState<string>("all");
@@ -54,22 +137,55 @@ export default function JobsClient() {
   const [rawJobs, setRawJobs] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchJobs = async () => {
-      try {
-        setIsLoading(true);
-        const res = await api.get("/hr/jobs?limit=100");
-        const jobsData = extractArray(res.data);
-        setRawJobs(jobsData);
-      } catch (err) {
-        console.error("Failed to load jobs", err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  // 🚀 PAGINATION STATES
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const limit = 30; // Max 30 jobs per fetch to maintain high performance
 
-    fetchJobs();
-  }, [refreshTick]);
+  // 🚀 SMART SERVER-SIDE FETCH
+  const fetchJobs = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      
+      const res = await api.get(`/hr/jobs`, {
+        params: {
+          page: page,
+          limit: limit,
+          status: tab !== "all" ? tab : undefined,
+          department: departmentFilter !== "all" ? departmentFilter : undefined,
+          rank: rankFilter !== "all" ? rankFilter : undefined,
+          vessel_type: vesselFilter !== "all" ? vesselFilter : undefined,
+          search: query.trim() || undefined 
+        }
+      });
+      
+      const payload = res.data?.data || res.data;
+      const jobsData = extractArray(payload);
+      setRawJobs(jobsData);
+      
+      if (payload?.pagination) {
+        setTotalPages(payload.pagination.totalPages || 1);
+        setTotalItems(payload.pagination.total || jobsData.length);
+      } else {
+        setTotalPages(1);
+        setTotalItems(jobsData.length);
+      }
+    } catch (err) {
+      console.error("Failed to load jobs", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [page, tab, departmentFilter, rankFilter, vesselFilter, query, refreshTick]);
+
+  // 🚀 DEBOUNCED EFFECT (Waits 400ms after user stops typing before making API call)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchJobs();
+    }, 400); 
+    
+    return () => clearTimeout(timer);
+  }, [fetchJobs]);
 
   const refresh = () => setRefreshTick((t) => t + 1);
 
@@ -100,26 +216,10 @@ export default function JobsClient() {
     });
   }, [rawJobs]);
 
-  // Dynamically extract unique options for the dropdowns
+  // Dynamic Options Extracted from current dataset
   const uniqueDepartments = useMemo(() => Array.from(new Set(jobs.map(j => j.department))).sort(), [jobs]);
   const uniqueRanks = useMemo(() => Array.from(new Set(jobs.map(j => j.rank))).sort(), [jobs]);
   const uniqueVessels = useMemo(() => Array.from(new Set(jobs.map(j => j.vesselType))).sort(), [jobs]);
-
-  const filtered = jobs
-    .filter((j) => tab === "all" || j.status === tab)
-    .filter((j) => departmentFilter === "all" || j.department === departmentFilter)
-    .filter((j) => rankFilter === "all" || j.rank === rankFilter)
-    .filter((j) => vesselFilter === "all" || j.vesselType === vesselFilter)
-    .filter((j) => {
-      const q = query.trim().toLowerCase();
-      if (!q) return true;
-      return (
-        j.title.toLowerCase().includes(q) ||
-        j.rank.toLowerCase().includes(q) ||
-        j.vesselType.toLowerCase().includes(q)
-      );
-    })
-    .sort((a, b) => (new Date(a.postedAt) < new Date(b.postedAt) ? 1 : -1));
 
   const updateJobStatus = async (id: string, newStatus: "active" | "closed") => {
     try {
@@ -135,6 +235,23 @@ export default function JobsClient() {
   };
 
   const hasActiveFilters = departmentFilter !== "all" || rankFilter !== "all" || vesselFilter !== "all";
+
+  // PAGINATION UI LOGIC
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (page <= 3) {
+        pages.push(1, 2, 3, 4, '...', totalPages);
+      } else if (page >= totalPages - 2) {
+        pages.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      } else {
+        pages.push(1, '...', page - 1, page, page + 1, '...', totalPages);
+      }
+    }
+    return pages;
+  };
 
   return (
     <DashboardShell pageTitle="Manage Jobs">
@@ -163,7 +280,7 @@ export default function JobsClient() {
             <button
               key={t}
               type="button"
-              onClick={() => setTab(t)}
+              onClick={() => { setTab(t); setPage(1); }} 
               className={`rounded-xl px-3.5 py-2 text-xs font-bold transition-colors ${
                 tab === t ? "bg-[#0F1E35] text-white" : "text-slate-500 hover:bg-slate-100"
               }`}
@@ -176,50 +293,39 @@ export default function JobsClient() {
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" strokeWidth={2} />
           <input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search keyword..."
+            onChange={(e) => { setQuery(e.target.value); setPage(1); }} 
+            placeholder="Search across all pages..."
             className="w-full rounded-2xl border border-[#E7EAF1] bg-white py-2.5 pl-10 pr-4 text-sm text-[#0F1E35] placeholder:text-slate-400 focus:border-[#F5B61A] focus:outline-none focus:ring-4 focus:ring-[#F5B61A]/10 sm:w-72 shadow-sm"
           />
         </div>
       </div>
 
-      {/* --- SECONDARY CONTROLS: Advanced Dropdown Filters --- */}
-      <div className="flex flex-wrap items-center gap-3 mt-4">
-        <div className="relative">
-          <Briefcase className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-          <select
-            value={departmentFilter}
-            onChange={(e) => setDepartmentFilter(e.target.value)}
-            className="appearance-none rounded-xl border border-[#E7EAF1] bg-white py-2 pl-9 pr-8 text-xs font-bold text-slate-600 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer shadow-sm"
-          >
-            <option value="all">All Departments</option>
-            {uniqueDepartments.map(dept => <option key={dept} value={dept}>{dept}</option>)}
-          </select>
-        </div>
+      {/* --- SECONDARY CONTROLS: Smart Searchable Dropdown Filters --- */}
+      <div className="flex flex-wrap items-center gap-3 mt-4 z-10">
+        
+        <SearchableSelect 
+          placeholder="All Departments" 
+          icon={Briefcase}
+          options={uniqueDepartments.map(d => ({ label: d, value: d }))} 
+          value={departmentFilter} 
+          onChange={(val) => { setDepartmentFilter(val); setPage(1); }} 
+        />
 
-        <div className="relative">
-          <Anchor className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-          <select
-            value={rankFilter}
-            onChange={(e) => setRankFilter(e.target.value)}
-            className="appearance-none rounded-xl border border-[#E7EAF1] bg-white py-2 pl-9 pr-8 text-xs font-bold text-slate-600 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer shadow-sm max-w-[200px] truncate"
-          >
-            <option value="all">All Ranks</option>
-            {uniqueRanks.map(rank => <option key={rank} value={rank}>{rank}</option>)}
-          </select>
-        </div>
+        <SearchableSelect 
+          placeholder="All Ranks" 
+          icon={Anchor}
+          options={uniqueRanks.map(r => ({ label: r, value: r }))} 
+          value={rankFilter} 
+          onChange={(val) => { setRankFilter(val); setPage(1); }} 
+        />
 
-        <div className="relative">
-          <Ship className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-          <select
-            value={vesselFilter}
-            onChange={(e) => setVesselFilter(e.target.value)}
-            className="appearance-none rounded-xl border border-[#E7EAF1] bg-white py-2 pl-9 pr-8 text-xs font-bold text-slate-600 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer shadow-sm max-w-[200px] truncate"
-          >
-            <option value="all">All Vessel Types</option>
-            {uniqueVessels.map(vessel => <option key={vessel} value={vessel}>{vessel}</option>)}
-          </select>
-        </div>
+        <SearchableSelect 
+          placeholder="All Vessel Types" 
+          icon={Ship}
+          options={uniqueVessels.map(v => ({ label: v, value: v }))} 
+          value={vesselFilter} 
+          onChange={(val) => { setVesselFilter(val); setPage(1); }} 
+        />
 
         {hasActiveFilters && (
           <button
@@ -227,8 +333,9 @@ export default function JobsClient() {
               setDepartmentFilter("all");
               setRankFilter("all");
               setVesselFilter("all");
+              setPage(1);
             }}
-            className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg transition-colors ml-auto sm:ml-0"
+            className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg transition-colors ml-auto sm:ml-0 shadow-sm"
           >
             <FilterX className="h-3.5 w-3.5" /> Clear Filters
           </button>
@@ -242,13 +349,13 @@ export default function JobsClient() {
           </div>
         )}
 
-        {!isLoading && filtered.length === 0 && (
+        {!isLoading && jobs.length === 0 && (
           <div className="rounded-[20px] border border-dashed border-[#E7EAF1] bg-white p-10 text-center text-sm text-slate-400">
-            No jobs match your current filters.
+            No jobs match your current filters. Try searching with different keywords.
           </div>
         )}
 
-        {!isLoading && filtered.map((job, i) => {
+        {!isLoading && jobs.map((job, i) => {
           const isClosed = job.status === 'closed';
 
           return (
@@ -359,6 +466,54 @@ export default function JobsClient() {
           );
         })}
       </div>
+
+      {/* 🚀 PAGINATION UI COMPONENT */}
+      {!isLoading && jobs.length > 0 && (
+        <div className="flex items-center justify-between mt-8 p-4 bg-white border border-[#E7EAF1] rounded-[20px] shadow-sm flex-wrap gap-4">
+          <span className="text-sm text-slate-500 font-medium">
+            Showing {((page - 1) * limit) + 1} to {Math.min(page * limit, totalItems)} of {totalItems} jobs
+          </span>
+          
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <button 
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="px-4 py-2 border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Prev
+            </button>
+            
+            <div className="hidden sm:flex items-center gap-1.5">
+              {getPageNumbers().map((num, idx) => (
+                num === '...' ? (
+                  <span key={`ellipsis-${idx}`} className="px-2 py-2 text-slate-400 font-bold tracking-widest">...</span>
+                ) : (
+                  <button 
+                    key={`page-${num}`}
+                    onClick={() => setPage(num as number)}
+                    className={`min-w-[40px] px-3 py-2 border rounded-xl text-sm font-semibold transition-colors
+                      ${num === page 
+                        ? 'border-[#0F1E35] bg-[#0F1E35] text-white shadow-sm' 
+                        : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+                      }`}
+                  >
+                    {num}
+                  </button>
+                )
+              ))}
+            </div>
+
+            <button 
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages || totalPages === 0}
+              className="px-4 py-2 border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+
     </DashboardShell>
   );
 }

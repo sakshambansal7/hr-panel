@@ -1,11 +1,10 @@
-
-
 // app/employer/dashboard/applications/page.tsx
 
 "use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation"; // 🚀 Imported useRouter
 import { 
   Search, Filter, Eye, MoreVertical, Mail, Phone, Clock, 
   Ship, Anchor, CheckCircle, AlertCircle, Briefcase, FilterX 
@@ -14,6 +13,7 @@ import DashboardShell from "../components/DashboardShell";
 import api from "../../../lib/api";
 
 export default function ApplicationsClient() {
+  const router = useRouter(); // 🚀 Initialized router
   const [applications, setApplications] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -29,7 +29,7 @@ export default function ApplicationsClient() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
-  const limit = 10; 
+  const limit = 20; 
   
   useEffect(() => {
     const fetchApplications = async () => {
@@ -63,7 +63,6 @@ export default function ApplicationsClient() {
 
   const handleStatusChange = async (appId: string, newStatus: string) => {
     try {
-      // Optimistic UI Update
       setApplications(prev => prev.map(app => 
         app.application_id === appId ? { ...app, status: newStatus } : app
       ));
@@ -96,9 +95,6 @@ export default function ApplicationsClient() {
     return pages;
   };
 
-  // -----------------------------------------------------------------------------
-  // UNIQUE FILTER OPTIONS
-  // -----------------------------------------------------------------------------
   const uniqueDepartments = Array.from(
     new Set(applications.map((app) => app.department).filter(Boolean).map(String))
   ).sort();
@@ -111,9 +107,6 @@ export default function ApplicationsClient() {
     new Set(applications.map((app) => app.vessel_type || app.ship_type).filter(Boolean).map(String))
   ).sort();
 
-  // -----------------------------------------------------------------------------
-  // FILTERED APPLICATIONS
-  // -----------------------------------------------------------------------------
   const filteredApplications = applications
     .filter((app) => departmentFilter === "all" || app.department === departmentFilter)
     .filter((app) => rankFilter === "all" || (app.rank || app.job_type) === rankFilter)
@@ -140,7 +133,6 @@ export default function ApplicationsClient() {
       <div className="bg-[#F4F7F9] min-h-screen -m-6 p-6">
         <div className="max-w-7xl mx-auto w-full">
           
-          {/* HEADER & SEARCH BAR */}
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-2">
             <div>
               <h1 className="text-3xl font-black text-[#0F1E35]">Applications</h1>
@@ -154,18 +146,13 @@ export default function ApplicationsClient() {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search candidate..." 
-                  
                   className="w-64 h-11 pl-9 pr-4 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none shadow-sm transition-all leading-normal"
                 />
               </div>
             </div>
           </div>
 
-          {/* ----------------------------------------------------------------------------- */}
-          {/* FILTER CONTROLS */}
-          {/* ----------------------------------------------------------------------------- */}
           <div className="flex flex-wrap items-center gap-3 mt-4 mb-8">
-            
             <div className="relative">
               <Briefcase className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
               <select
@@ -216,7 +203,6 @@ export default function ApplicationsClient() {
             )}
           </div>
 
-          {/* LOADING & EMPTY STATES */}
           {isLoading ? (
             <div className="flex flex-col items-center justify-center h-64 text-slate-400 font-bold animate-pulse">
               Loading applications...
@@ -229,15 +215,27 @@ export default function ApplicationsClient() {
           ) : (
             <div className="space-y-4">
               
-              {/* HORIZONTAL CARDS LIST */}
               {filteredApplications.map((app) => {
                 const match = getMockMatchScore(app.application_id);
                 const isProcessed = app.status && app.status.toLowerCase() !== 'applied';
                 
                 return (
-                  <div key={app.application_id} className="group bg-white border border-slate-200 rounded-[20px] p-5 md:p-6 shadow-sm hover:shadow-md hover:border-blue-300 transition-all duration-300 flex flex-col xl:flex-row items-start xl:items-center gap-6 relative overflow-hidden">
+                  <div 
+                    key={app.application_id} 
+                    // 🚀 ADDED CLICK LISTENER TO THE ENTIRE CARD
+                    onClick={(e) => {
+                      const target = e.target as HTMLElement;
+                      // Don't redirect if clicking buttons, links, or dropdowns
+                      if (target.closest('button') || target.closest('a') || target.closest('select')) {
+                        return;
+                      }
+                      if (app.job_id) {
+                        router.push(`/employer/dashboard/jobs/${app.job_id}?highlight=${app.application_id}`);
+                      }
+                    }}
+                    className="group bg-white border border-slate-200 rounded-[20px] p-5 md:p-6 shadow-sm hover:shadow-md hover:border-blue-300 transition-all duration-300 flex flex-col xl:flex-row items-start xl:items-center gap-6 relative overflow-hidden cursor-pointer"
+                  >
                     
-                    {/* Left Accent Bar */}
                     <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${
                       app.status === 'shortlisted' ? 'bg-purple-500' :
                       app.status === 'selected' ? 'bg-emerald-500' :
@@ -245,7 +243,7 @@ export default function ApplicationsClient() {
                       'bg-blue-500'
                     }`} />
 
-                    {/* 1. CANDIDATE PROFILE (Left) */}
+                    {/* 1. CANDIDATE PROFILE */}
                     <div className="flex flex-col w-full xl:w-[30%] xl:pl-2">
                       <div className="flex items-center gap-2">
                         <Link href={`/employer/dashboard/candidates/${app.candidate_id}`} className="text-lg font-bold text-[#0F1E35] hover:text-blue-600 transition-colors">
@@ -266,7 +264,7 @@ export default function ApplicationsClient() {
                       </div>
                     </div>
 
-                    {/* 2. JOB DETAILS (Middle-Left) */}
+                    {/* 2. JOB DETAILS */}
                     <div className="w-full xl:w-[25%] flex flex-col justify-center border-l-0 xl:border-l border-slate-100 xl:pl-6">
                       <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400 mb-1">Applied Position</p>
                       <div className="flex items-center gap-2 font-bold text-slate-900 mb-1">
@@ -279,7 +277,7 @@ export default function ApplicationsClient() {
                       </div>
                     </div>
 
-                    {/* 3. READINESS MATCH (Middle-Right) */}
+                    {/* 3. READINESS MATCH */}
                     <div className="w-full xl:w-[25%] flex flex-col justify-center border-l-0 xl:border-l border-slate-100 xl:pl-6">
                       <div className="flex items-center justify-between mb-2">
                         <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400">Readiness Match</p>
@@ -301,7 +299,7 @@ export default function ApplicationsClient() {
                       </div>
                     </div>
 
-                    {/* 4. ACTIONS & STATUS BADGE (Right) */}
+                    {/* 4. ACTIONS */}
                     <div className="w-full xl:w-[20%] flex flex-row xl:flex-col items-center xl:items-end justify-between xl:justify-center border-t xl:border-t-0 border-slate-100 pt-4 xl:pt-0 gap-3 ml-auto">
                       
                       {!isProcessed ? (
@@ -333,7 +331,6 @@ export default function ApplicationsClient() {
                             }`} />
                             {app.status}
                           </span>
-                          {/* HR Undo safety net */}
                           <button onClick={() => handleStatusChange(app.application_id, 'applied')} className="text-[10px] text-slate-400 hover:text-blue-600 underline px-1">
                             Undo Action
                           </button>
@@ -344,9 +341,6 @@ export default function ApplicationsClient() {
                         <p className="text-[10px] font-medium text-slate-400 hidden xl:block">
                           Applied: {new Date(app.created_at).toLocaleDateString()}
                         </p>
-                        <Link href={`/employer/dashboard/candidates/${app.candidate_id}`} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100" title="View Application">
-                          <Eye className="w-4 h-4" />
-                        </Link>
                       </div>
                     </div>
 
@@ -356,7 +350,6 @@ export default function ApplicationsClient() {
             </div>
           )}
 
-          {/* REAL PAGINATION CONTROL */}
           {!isLoading && filteredApplications.length > 0 && (
             <div className="flex items-center justify-between mt-8 p-4 bg-white border border-slate-200 rounded-[20px] shadow-sm flex-wrap gap-4">
               <span className="text-sm text-slate-500 font-medium">
