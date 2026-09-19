@@ -1,6 +1,5 @@
 // app/context/auth-context.tsx
 
-
 "use client";
 
 import {
@@ -32,6 +31,7 @@ export type User = {
   name: string;
   email: string;
   role: Role;
+  phone_number?: string; // 🚀 ADDED: Required for HR Profile
   lastLoginAt?: string;
 };
 
@@ -40,6 +40,7 @@ export type ApiUser = {
   name: string;
   email: string;
   role: string;
+  phone_number?: string; // 🚀 ADDED: Required for HR Profile
 };
 
 // Maps the roles the real backend uses onto this app's internal Role type
@@ -56,6 +57,7 @@ type AuthContextValue = {
   user: User | null;
   ready: boolean;
   setSessionUser: (apiUser: ApiUser, token?: string) => void;
+  updateLocalUser: (patch: Partial<User>) => void; // 🚀 ADDED
   logout: () => void;
 };
 
@@ -80,15 +82,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         if (rawSession) {
           const parsedUser = JSON.parse(rawSession) as User;
-          if (decoded && decoded.role) {
-            parsedUser.role = mapApiRole(decoded.role);
+          
+          // Merge JWT data to ensure roles are always up to date
+          if (decoded) {
+            if (decoded.email) parsedUser.email = decoded.email;
+            if (decoded.name) parsedUser.name = decoded.name;
+            if (decoded.phone_number) parsedUser.phone_number = decoded.phone_number;
+            if (decoded.role) parsedUser.role = mapApiRole(decoded.role);
           }
+          
           setUser(parsedUser);
         } else if (decoded) {
           // Fallback if session storage was wiped but token still exists
           const recoveredUser: User = {
             name: decoded.name || decoded.email || "Employer",
             email: decoded.email || "",
+            phone_number: decoded.phone_number || "",
             role: mapApiRole(decoded.role),
           };
           setUser(recoveredUser);
@@ -116,9 +125,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const lastLoginAt = new Date().toISOString();
     
     const session: User = {
-      // Fallback to email if name isn't provided by backend yet
       name: apiUser.name || apiUser.email, 
       email: apiUser.email,
+      phone_number: apiUser.phone_number, // 🚀 ADDED
       role: finalRole, 
       lastLoginAt,
     };
@@ -131,6 +140,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     
     setUser(session);
+  }
+
+  // 🚀 NEW: LOCAL UPDATE HANDLER (For Profile Page)
+  function updateLocalUser(patch: Partial<User>) {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, ...patch };
+      window.localStorage.setItem(SESSION_KEY, JSON.stringify(updated));
+      return updated;
+    });
   }
 
   // 🚀 REAL PRODUCTION LOGOUT HANDLER
@@ -149,7 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, ready, setSessionUser, logout }}>
+    <AuthContext.Provider value={{ user, ready, setSessionUser, updateLocalUser, logout }}>
       {children}
     </AuthContext.Provider>
   );

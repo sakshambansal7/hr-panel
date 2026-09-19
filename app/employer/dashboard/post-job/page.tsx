@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, ShieldAlert, Ship, Briefcase, Plus, Trash2, CheckCircle2, Wand2, Settings2 } from "lucide-react";
+import { ArrowLeft, ShieldAlert, Ship, Briefcase, Plus, Trash2, CheckCircle2, Wand2, Settings2, Calendar } from "lucide-react";
 import DashboardShell from "../components/DashboardShell";
 import { useAuth } from "../../../context/auth-context";
 import { getCompanyProfile } from "../../../lib/company-profile-store";
@@ -32,7 +32,7 @@ function formatTitleCase(str: string | null | undefined): string {
   return str.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-// 🚀 UPDATED: Added salary to the interface
+// 🚀 UPDATED: Added expectedJoining to the interface
 interface PositionEntry {
   id: string;
   department: string;
@@ -40,6 +40,7 @@ interface PositionEntry {
   title: string;
   salary: string;
   requirements: string;
+  expectedJoining: string;
 }
 
 interface VesselGroup {
@@ -52,10 +53,8 @@ export default function UnifiedPostJobPage() {
   const { user } = useAuth();
   const router = useRouter();
 
-  // 🚀 NEW: Mode Toggle State
   const [entryMode, setEntryMode] = useState<"smart" | "manual">("smart");
 
-  // API Driven States
   const [departmentsList, setDepartmentsList] = useState<any[]>([]);
   const [vesselOptions, setVesselOptions] = useState<string[]>([]);
   const [companyId, setCompanyId] = useState<number>(1);
@@ -63,22 +62,20 @@ export default function UnifiedPostJobPage() {
 
   const isVerified = useMemo(() => (user ? Boolean(getCompanyProfile(user.email).verified) : false), [user]);
 
-  // 🚀 NEW: Smart Paste States
   const [rawVacancyText, setRawVacancyText] = useState("");
   const [smartSuccess, setSmartSuccess] = useState(false);
 
-  // Form States
   const [shipType, setShipType] = useState<string>("mainfleet");
   const [contractLength, setContractLength] = useState("6 Months");
   const [commonRequirements, setCommonRequirements] = useState("");
   const [itfApproved, setItfApproved] = useState(true);
   const [rpslValid, setRpslValid] = useState(true);
 
-  // 🚀 UPDATED: Initialized salary inside the nested array state
+  // 🚀 UPDATED: Added expectedJoining to the initial position object
   const [vessels, setVessels] = useState<VesselGroup[]>([{
     id: `vessel-${Date.now()}`,
     vesselName: "",
-    positions: [{ id: `pos-${Date.now()}`, department: "", rank: "", title: "", salary: "", requirements: "" }]
+    positions: [{ id: `pos-${Date.now()}`, department: "", rank: "", title: "", salary: "", requirements: "", expectedJoining: "" }]
   }]);
 
   useEffect(() => {
@@ -112,13 +109,13 @@ export default function UnifiedPostJobPage() {
     fetchCompanyId();
   }, [user]);
 
-  // --- UI LOGIC HANDLERS ---
   const handleShipTypeChange = (val: string) => {
     setShipType(val);
     setVessels([{
       id: `vessel-${Date.now()}`,
       vesselName: val === "shore" ? "Shore Operations" : "",
-      positions: [{ id: `pos-${Date.now()}`, department: val === "shore" ? "Shore" : "", rank: "", title: "", salary: "", requirements: "" }]
+      // 🚀 UPDATED: expectedJoining included
+      positions: [{ id: `pos-${Date.now()}`, department: val === "shore" ? "Shore" : "", rank: "", title: "", salary: "", requirements: "", expectedJoining: "" }]
     }]);
   };
 
@@ -126,7 +123,8 @@ export default function UnifiedPostJobPage() {
     setVessels([...vessels, {
       id: `vessel-${Date.now()}`,
       vesselName: "",
-      positions: [{ id: `pos-${Date.now()}`, department: "", rank: "", title: "", salary: "", requirements: "" }]
+      // 🚀 UPDATED
+      positions: [{ id: `pos-${Date.now()}`, department: "", rank: "", title: "", salary: "", requirements: "", expectedJoining: "" }]
     }]);
   };
 
@@ -136,7 +134,8 @@ export default function UnifiedPostJobPage() {
 
   const addPosition = (vesselId: string) => {
     setVessels(vessels.map(v => v.id === vesselId ? {
-      ...v, positions: [...v.positions, { id: `pos-${Date.now()}`, department: shipType === "shore" ? "Shore" : "", rank: "", title: "", salary: "", requirements: "" }]
+      // 🚀 UPDATED
+      ...v, positions: [...v.positions, { id: `pos-${Date.now()}`, department: shipType === "shore" ? "Shore" : "", rank: "", title: "", salary: "", requirements: "", expectedJoining: "" }]
     } : v));
   };
 
@@ -158,7 +157,6 @@ export default function UnifiedPostJobPage() {
     } : v));
   };
 
-  // 🚀 NEW: Smart Paste Submit Logic
   const handleSmartSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId) return alert("Company Profile not found. Please setup your profile first.");
@@ -180,7 +178,6 @@ export default function UnifiedPostJobPage() {
     }
   };
 
-  // --- SUBMIT LOGIC ---
   const handleSubmit = async (e: React.FormEvent, statusOverride?: string) => {
     e.preventDefault();
     if (!companyId) return alert("Company Profile not found. Please setup your profile first.");
@@ -212,7 +209,8 @@ export default function UnifiedPostJobPage() {
           contract: contractLength || "TBD",
           requirement_description: commonRequirements || "Standard requirements apply.",
           position_specifics: specifics || "Standard terms.",
-          salary: pos.salary || "Negotiable", // 🚀 UPDATED: Push salary to backend payload
+          salary: pos.salary || "Negotiable",
+          expected_joining: pos.expectedJoining || "", // 🚀 UPDATED: Push expected joining to backend
           status: statusOverride || (isVerified ? "active" : "pending")
         });
         totalPositions++;
@@ -240,7 +238,6 @@ export default function UnifiedPostJobPage() {
     <DashboardShell pageTitle="Post Job Vacancies">
       <div className="space-y-6 max-w-5xl mx-auto">
         
-        {/* Header & Toggle */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-[#E7EAF1] pb-5">
           <div>
             <span className="text-[11px] font-bold tracking-widest text-slate-500 uppercase block mb-1">
@@ -272,9 +269,6 @@ export default function UnifiedPostJobPage() {
 
         <AnimatePresence mode="wait">
           
-          {/* ========================================== */}
-          {/* SMART PASTE MODE */}
-          {/* ========================================== */}
           {entryMode === "smart" && (
             <motion.div key="smart" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
               <div className="rounded-[20px] border border-[#E7EAF1] bg-white p-8 shadow-[0_1px_2px_rgba(15,30,53,0.04)] max-w-3xl mx-auto">
@@ -330,13 +324,9 @@ export default function UnifiedPostJobPage() {
             </motion.div>
           )}
 
-          {/* ========================================== */}
-          {/* MANUAL BUILDER MODE (YOUR EXACT CODE) */}
-          {/* ========================================== */}
           {entryMode === "manual" && (
             <motion.form key="manual" onSubmit={(e) => handleSubmit(e, "active")} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6 max-w-5xl">
               
-              {/* --- GLOBAL SETTINGS (Applies to all positions) --- */}
               <div className="rounded-[20px] border border-[#E7EAF1] bg-white p-6 shadow-[0_1px_2px_rgba(15,30,53,0.04)] space-y-5">
                 <h2 className="text-sm font-bold text-[#0F1E35] uppercase tracking-wide flex items-center gap-2 border-b border-[#E7EAF1] pb-3">
                   <Briefcase className="w-4 h-4 text-[#F5B61A]" /> Global Contract Details
@@ -372,7 +362,6 @@ export default function UnifiedPostJobPage() {
                 </div>
               </div>
 
-              {/* --- DYNAMIC VESSEL & POSITIONS SECTION --- */}
               <div className="space-y-6">
                 <h2 className="text-base font-bold text-[#0F1E35] flex items-center gap-2">
                   Job Positions <span className="text-red-500">*</span>
@@ -381,7 +370,6 @@ export default function UnifiedPostJobPage() {
                 {vessels.map((vessel, vIndex) => (
                   <div key={vessel.id} className="rounded-2xl border-l-4 border-l-[#0F1E35] border border-[#E7EAF1] bg-white p-6 shadow-sm space-y-5 animate-in fade-in slide-in-from-bottom-2">
                     
-                    {/* Vessel Header */}
                     {showVesselDropdown ? (
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E7EAF1] pb-4">
                         <div className="flex-1 max-w-md">
@@ -406,7 +394,6 @@ export default function UnifiedPostJobPage() {
                       </div>
                     )}
 
-                    {/* Positions List */}
                     <div className="space-y-4">
                       <p className="text-xs font-bold text-[#0F1E35] uppercase tracking-wide">Positions in this group:</p>
                       
@@ -450,10 +437,23 @@ export default function UnifiedPostJobPage() {
                             </div>
                           </div>
 
-                          <div className="grid gap-4 sm:grid-cols-2">
+                          {/* 🚀 UPDATED: Salary + Expected Joining + Specific Requirements row */}
+                          <div className="grid gap-4 sm:grid-cols-3">
                             <div>
                               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 block">Salary Range (Optional)</label>
                               <input type="text" value={pos.salary} onChange={(e) => updatePosition(vessel.id, pos.id, "salary", e.target.value)} placeholder="e.g., $3000 - $5000" className={inputClass} />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 block flex items-center gap-1.5">
+                                <Calendar className="w-3 h-3 text-[#F5B61A]" /> Expected Joining (Optional)
+                              </label>
+                              <input
+                                type="text"
+                                value={pos.expectedJoining}
+                                onChange={(e) => updatePosition(vessel.id, pos.id, "expectedJoining", e.target.value)}
+                                placeholder="e.g. 20th August 2025 / ASAP"
+                                className={inputClass}
+                              />
                             </div>
                             <div>
                               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 block">Specific Requirements (Optional)</label>
@@ -479,7 +479,6 @@ export default function UnifiedPostJobPage() {
                 )}
               </div>
 
-              {/* --- SUBMIT FOOTER --- */}
               <div className="sticky bottom-0 z-10 flex items-center justify-between rounded-t-2xl border-t border-[#E7EAF1] bg-white/80 backdrop-blur-md p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] mt-10">
                 <div className="hidden sm:block">
                   <p className="text-xs font-bold text-slate-500">Ready to publish</p>

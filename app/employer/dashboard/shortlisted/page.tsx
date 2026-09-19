@@ -1,15 +1,11 @@
-
-// app/employer/dashboard/shortlisted/page.tsx
-
 // app/employer/dashboard/shortlisted/page.tsx
 
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import {
   Search,
-  Eye,
   MoreVertical,
   Mail,
   Phone,
@@ -17,14 +13,14 @@ import {
   Anchor,
   CheckCircle,
   AlertCircle,
-  CalendarCheck,
   XCircle,
+  Loader2,
 } from "lucide-react";
 import DashboardShell from "../components/DashboardShell";
 import api from "../../../lib/api";
 
 type Application = {
-  application_id: string;
+  application_id: string | number;
   candidate_id: string | number;
   candidate_name?: string;
   candidate_email?: string;
@@ -38,92 +34,167 @@ type Application = {
   created_at: string;
 };
 
+const PAGE_SIZE = 20;
+
 export default function ShortlistedApplicationsPage() {
   const [applications, setApplications] = useState<Application[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
   const [search, setSearch] = useState("");
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [updatingId, setUpdatingId] = useState<string | number | null>(null);
 
-  const fetchShortlistedApplications = useCallback(async () => {
-    try {
-      setIsLoading(true);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
-      // Backend filters only shortlisted applications
-      const res = await api.get(
-        "/hr/applications?status=shortlisted&limit=1000"
-      );
+  // ==========================================
+  // FETCH ONE PAGE — API-side status filter
+  // ==========================================
+  const fetchPage = useCallback(async (pageNum: number) => {
+    const res = await api.get(
+      `/hr/applications?page=${pageNum}&limit=${PAGE_SIZE}&status=shortlisted`
+    );
 
-      const payload = res.data?.data || res.data;
+    const payload = res.data?.data || res.data;
+    const items: Application[] = Array.isArray(payload?.items)
+      ? payload.items
+      : Array.isArray(payload?.data)
+      ? payload.data
+      : Array.isArray(payload)
+      ? payload
+      : [];
 
-      let appsArray: Application[] = [];
+    const pagination = payload?.pagination || {};
+    const total = pagination.total ?? payload?.total ?? items.length;
+    const totalPages = pagination.totalPages ?? 1;
 
-      if (payload?.items && Array.isArray(payload.items)) {
-        appsArray = payload.items;
-      } else if (Array.isArray(payload?.data)) {
-        appsArray = payload.data;
-      } else if (Array.isArray(payload)) {
-        appsArray = payload;
-      }
+    // Belt & suspenders: if the backend ignored ?status=shortlisted, filter client-side
+    const shortlisted = items.filter(
+      (app) =>
+        String(app.status || "").trim().toLowerCase() === "shortlisted"
+    );
 
-      // Extra frontend safety
-      appsArray = appsArray.filter(
-        (app) => app.status?.toLowerCase() === "shortlisted"
-      );
-
-      setApplications(appsArray);
-    } catch (err) {
-      console.error("Failed to fetch shortlisted applications", err);
-    } finally {
-      setIsLoading(false);
-    }
+    return {
+      appsArray: shortlisted,
+      total,
+      totalPages,
+      rawCount: items.length,
+    };
   }, []);
 
-  const handleRejectCandidate = async (applicationId: string) => {
-  try {
-    setUpdatingId(applicationId);
-
-    await api.patch(
-      `/hr/applications/${applicationId}/status`,
-      {
-        status: "rejected",
-      }
-    );
-
-    // Remove from shortlisted list
-    setApplications((prev) =>
-      prev.filter(
-        (app) => app.application_id !== applicationId
-      )
-    );
-  } catch (err) {
-    console.error("Failed to reject candidate", err);
-    alert("Failed to reject candidate. Please try again.");
-  } finally {
-    setUpdatingId(null);
-  }
-};
-
+  // ==========================================
+  // INITIAL LOAD
+  // ==========================================
   useEffect(() => {
-    fetchShortlistedApplications();
-  }, [fetchShortlistedApplications]);
+    let cancelled = false;
 
-  /**
-   * HR is allowed to perform only:
-   *
-   * shortlisted -> selected
-   */
-  const handleSelectCandidate = async (applicationId: string) => {
+    const loadFirst = async () => {
+      try {
+        setIsLoading(true);
+        const { appsArray, total, totalPages, rawCount } = await fetchPage(1);
+        if (cancelled) return;
+
+        setApplications(appsArray);
+        setTotalCount(total);
+        setHasMore(rawCount === PAGE_SIZE && 1 < totalPages);
+        setPage(1);
+      } catch (err) {
+        console.error("[Shortlisted] Initial fetch failed:", err);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+
+    loadFirst();
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchPage]);
+
+  // ==========================================
+  // INFINITE SCROLL
+  // ==========================================
+  useEffect(() => {
+    if (isLoading || isFetchingMore || !hasMore) return;
+
+    const handleObserver = (entries: IntersectionObserverEntry[]) => {
+      const target = entries[0];
+      if (!target.isIntersecting) return;
+
+      const nextPage = page + 1;
+
+      (async () => {
+        try {
+          setIsFetchingMore(true);
+          const { appsArray, totalPages, rawCount } = await fetchPage(nextPage);
+
+          setApplications((prev) => {
+            const seen = new Set(prev.map((a) => String(a.application_id)));
+            return [
+              ...prev,
+              ...appsArray.filter((a) => !seen.has(String(a.application_id))),
+            ];
+          });
+
+          setPage(nextPage);
+
+          if (nextPage >= totalPages || rawCount < PAGE_SIZE) {
+            setHasMore(false);
+          }
+        } catch (err) {
+          console.error("[Shortlisted] Load more failed:", err);
+          setHasMore(false);
+        } finally {
+          setIsFetchingMore(false);
+        }
+      })();
+    };
+
+    const observer = new IntersectionObserver(handleObserver, {
+      root: null,
+      rootMargin: "200px",
+      threshold: 0.1,
+    });
+
+    observerRef.current = observer;
+    if (loadMoreRef.current) observer.observe(loadMoreRef.current);
+
+    return () => observer.disconnect();
+  }, [page, isLoading, isFetchingMore, hasMore, fetchPage]);
+
+  // ==========================================
+  // ACTIONS
+  // ==========================================
+  const handleRejectCandidate = async (applicationId: string | number) => {
     try {
       setUpdatingId(applicationId);
-
       await api.patch(`/hr/applications/${applicationId}/status`, {
-        status: "selected",
+        status: "rejected",
       });
-
-      // Remove from shortlisted list immediately
       setApplications((prev) =>
         prev.filter((app) => app.application_id !== applicationId)
       );
+      setTotalCount((c) => Math.max(0, c - 1));
+    } catch (err) {
+      console.error("Failed to reject candidate", err);
+      alert("Failed to reject candidate. Please try again.");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const handleSelectCandidate = async (applicationId: string | number) => {
+    try {
+      setUpdatingId(applicationId);
+      await api.patch(`/hr/applications/${applicationId}/status`, {
+        status: "selected",
+      });
+      setApplications((prev) =>
+        prev.filter((app) => app.application_id !== applicationId)
+      );
+      setTotalCount((c) => Math.max(0, c - 1));
     } catch (err) {
       console.error("Failed to select candidate", err);
       alert("Failed to select candidate. Please try again.");
@@ -131,14 +202,6 @@ export default function ShortlistedApplicationsPage() {
       setUpdatingId(null);
     }
   };
-
-  /**
-   * NOTE:
-   * There is intentionally no "Reject" action here.
-   *
-   * Requirement:
-   * HR cannot change shortlisted status except to selected.
-   */
 
   const getMockMatchScore = (id: string | number) => {
     const num =
@@ -149,7 +212,6 @@ export default function ShortlistedApplicationsPage() {
     const score = (num % 40) + 60;
 
     let label = "Fair";
-
     if (score >= 90) label = "Excellent";
     else if (score >= 70) label = "Good";
     else if (score < 65) label = "Low Match";
@@ -159,7 +221,6 @@ export default function ShortlistedApplicationsPage() {
 
   const filteredApplications = applications.filter((app) => {
     const query = search.toLowerCase().trim();
-
     if (!query) return true;
 
     return (
@@ -174,11 +235,8 @@ export default function ShortlistedApplicationsPage() {
 
   return (
     <DashboardShell pageTitle="Shortlisted Candidates">
-      
       <div className="bg-[#F4F7F9] min-h-screen -m-6 p-6">
-        
         <div className="max-w-7xl mx-auto w-full">
-
           {/* HEADER */}
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
             <div>
@@ -186,7 +244,6 @@ export default function ShortlistedApplicationsPage() {
                 <h1 className="text-3xl font-black text-[#0F1E35]">
                   Shortlisted Candidates
                 </h1>
-
                 <span className="px-2.5 py-1 rounded-full bg-purple-100 text-purple-700 text-xs font-bold">
                   {applications.length}
                 </span>
@@ -230,27 +287,19 @@ export default function ShortlistedApplicationsPage() {
             </div>
           ) : (
             <div className="space-y-4">
-
               {filteredApplications.map((app) => {
                 const match = getMockMatchScore(app.application_id);
 
                 return (
                   <div
-                    key={app.application_id}
+                    key={String(app.application_id)}
                     className="group bg-white border border-slate-200 rounded-[20px] p-5 md:p-6 shadow-sm hover:shadow-md hover:border-purple-300 transition-all duration-300 flex flex-col xl:flex-row items-start xl:items-center gap-6 relative overflow-hidden"
                   >
-
-                    {/* LEFT ACCENT */}
                     <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-purple-500" />
 
-                    {/* ================================================= */}
-                    {/* 1. CANDIDATE */}
-                    {/* ================================================= */}
-
+                    {/* CANDIDATE */}
                     <div className="flex flex-col w-full xl:w-[30%] xl:pl-2">
-
                       <div className="flex items-center gap-2">
-
                         <Link
                           href={`/employer/dashboard/candidates/${app.candidate_id}`}
                           className="text-lg font-bold text-[#0F1E35] hover:text-blue-600 transition-colors"
@@ -272,14 +321,12 @@ export default function ShortlistedApplicationsPage() {
                       </div>
 
                       <div className="flex items-center gap-3 mt-2 text-xs text-slate-400">
-
                         {app.candidate_email && (
                           <a
                             href={`mailto:${app.candidate_email}`}
                             className="flex items-center gap-1 hover:text-blue-600 cursor-pointer transition-colors"
                           >
-                            <Mail className="w-3 h-3" />
-                            Email
+                            <Mail className="w-3 h-3" /> Email
                           </a>
                         )}
 
@@ -288,34 +335,25 @@ export default function ShortlistedApplicationsPage() {
                             href={`tel:${app.phone_number}`}
                             className="flex items-center gap-1 hover:text-blue-600 cursor-pointer transition-colors"
                           >
-                            <Phone className="w-3 h-3" />
-                            Call
+                            <Phone className="w-3 h-3" /> Call
                           </a>
                         )}
                       </div>
                     </div>
 
-                    {/* ================================================= */}
-                    {/* 2. JOB DETAILS */}
-                    {/* ================================================= */}
-
+                    {/* JOB DETAILS */}
                     <div className="w-full xl:w-[25%] flex flex-col justify-center border-l-0 xl:border-l border-slate-100 xl:pl-6">
-
                       <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400 mb-1">
                         Applied Position
                       </p>
 
                       <div className="flex items-center gap-2 font-bold text-slate-900 mb-1">
                         <Anchor className="w-4 h-4 text-blue-500" />
-
-                        {app.rank ||
-                          app.job_type ||
-                          "Unspecified Role"}
+                        {app.rank || app.job_type || "Unspecified Role"}
                       </div>
 
                       <div className="flex items-center gap-1.5 text-xs text-slate-500">
                         <Ship className="w-3.5 h-3.5" />
-
                         {app.department ||
                           app.vessel_type ||
                           app.ship_type ||
@@ -323,21 +361,15 @@ export default function ShortlistedApplicationsPage() {
                       </div>
                     </div>
 
-                    {/* ================================================= */}
-                    {/* 3. READINESS MATCH */}
-                    {/* ================================================= */}
-
+                    {/* MATCH */}
                     <div className="w-full xl:w-[25%] flex flex-col justify-center border-l-0 xl:border-l border-slate-100 xl:pl-6">
-
                       <div className="flex items-center justify-between mb-2">
-
                         <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400">
                           Readiness Match
                         </p>
 
                         <span
-                          className={`text-[10px] px-2 py-0.5 rounded-md uppercase font-bold
-                          ${
+                          className={`text-[10px] px-2 py-0.5 rounded-md uppercase font-bold ${
                             match.score >= 90
                               ? "bg-emerald-50 text-emerald-700"
                               : match.score >= 70
@@ -350,23 +382,17 @@ export default function ShortlistedApplicationsPage() {
                       </div>
 
                       <div className="flex items-center gap-3">
-
                         <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-
                           <div
-                            className={`h-full rounded-full
-                            ${
+                            className={`h-full rounded-full ${
                               match.score >= 90
                                 ? "bg-emerald-500"
                                 : match.score >= 70
                                 ? "bg-blue-500"
                                 : "bg-red-500"
                             }`}
-                            style={{
-                              width: `${match.score}%`,
-                            }}
+                            style={{ width: `${match.score}%` }}
                           />
-
                         </div>
 
                         <span className="text-sm font-black text-slate-900">
@@ -376,92 +402,81 @@ export default function ShortlistedApplicationsPage() {
 
                       {match.score < 70 && (
                         <div className="flex items-start gap-1.5 mt-2 text-red-600 bg-red-50 p-1.5 rounded-lg border border-red-100">
-
                           <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-
                           <span className="text-[10px] font-semibold leading-tight">
                             Missing documentation
                           </span>
-
                         </div>
                       )}
                     </div>
 
-                    {/* ================================================= */}
-                    {/* 4. STATUS + ACTIONS */}
-                    {/* ================================================= */}
+                    {/* ACTIONS */}
+                    <div className="w-full xl:w-[20%] flex flex-row xl:flex-col items-center xl:items-end justify-between xl:justify-center border-t xl:border-t-0 border-slate-100 pt-4 xl:pt-0 gap-3 ml-auto">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-100 text-[10px] font-bold uppercase tracking-wide">
+                          <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                          Shortlisted
+                        </span>
 
-                   {/* ================================================= */}
-{/* 4. STATUS + ACTIONS */}
-{/* ================================================= */}
+                        <p className="text-[10px] font-medium text-slate-400 hidden xl:block">
+                          Applied:{" "}
+                          {new Date(app.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
 
-<div className="w-full xl:w-[20%] flex flex-row xl:flex-col items-center xl:items-end justify-between xl:justify-center border-t xl:border-t-0 border-slate-100 pt-4 xl:pt-0 gap-3 ml-auto">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() =>
+                            handleSelectCandidate(app.application_id)
+                          }
+                          disabled={updatingId === app.application_id}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100 hover:border-emerald-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <CheckCircle className="w-3.5 h-3.5" />
 
-  <div className="flex items-center gap-2">
+                          {updatingId === app.application_id
+                            ? "Selecting..."
+                            : "Select"}
+                        </button>
 
-    {/* Current Status */}
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-100 text-[10px] font-bold uppercase tracking-wide">
-      <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
-      Shortlisted
-    </span>
+                        <button
+                          onClick={() =>
+                            handleRejectCandidate(app.application_id)
+                          }
+                          disabled={updatingId === app.application_id}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-100 hover:border-red-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                          Reject
+                        </button>
 
-    {/* Applied Date */}
-    <p className="text-[10px] font-medium text-slate-400 hidden xl:block">
-      Applied: {new Date(app.created_at).toLocaleDateString()}
-    </p>
-
-  </div>
-
-
-  <div className="flex items-center gap-2">
-
-    {/* VIEW PROFILE */}
-    
-     
-   
-
-    {/* SELECT */}
-    <button
-      onClick={() =>
-        handleSelectCandidate(app.application_id)
-      }
-      disabled={updatingId === app.application_id}
-      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100 hover:border-emerald-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-    >
-      <CheckCircle className="w-3.5 h-3.5" />
-
-      {updatingId === app.application_id
-        ? "Selecting..."
-        : "Select"}
-    </button>
-
-    {/* REJECT */}
-    <button
-      onClick={() =>
-        handleRejectCandidate(app.application_id)
-      }
-      disabled={updatingId === app.application_id}
-      className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-100 hover:border-red-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-    >
-      <XCircle className="w-3.5 h-3.5" />
-      Reject
-    </button>
-
-    {/* MORE */}
-    <button
-      className="p-2 text-slate-400 hover:text-[#0F1E35] hover:bg-slate-100 rounded-lg transition-colors border border-transparent hover:border-slate-200"
-      title="More options"
-    >
-      <MoreVertical className="w-4 h-4" />
-    </button>
-
-  </div>
-  
-</div>
-
+                        <button
+                          className="p-2 text-slate-400 hover:text-[#0F1E35] hover:bg-slate-100 rounded-lg transition-colors border border-transparent hover:border-slate-200"
+                          title="More options"
+                        >
+                          <MoreVertical className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 );
               })}
+
+              {/* Infinite scroll sentinel */}
+              <div ref={loadMoreRef} className="py-6 text-center">
+                {isFetchingMore && (
+                  <div className="inline-flex items-center gap-2 text-xs font-bold text-slate-500">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Loading more candidates...
+                  </div>
+                )}
+
+                {!hasMore && filteredApplications.length > 0 && (
+                  <p className="text-xs font-semibold text-slate-400">
+                    You&apos;ve reached the end of the list.
+                  </p>
+                )}
+              </div>
             </div>
           )}
         </div>

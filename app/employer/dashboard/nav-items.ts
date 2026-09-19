@@ -12,6 +12,7 @@ import {
   Star,
   CreditCard,
   Settings,
+  User, // 🚀 Added User icon
   type LucideIcon,
 } from "lucide-react";
 
@@ -23,6 +24,7 @@ export type NavItem = {
 
 export const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/employer/dashboard", icon: LayoutDashboard },
+  { label: "My Profile", href: "/employer/dashboard/profile", icon: User }, // 🚀 Added My Profile
   { label: "Post New Job", href: "/employer/dashboard/post-job", icon: CirclePlus },
   { label: "Manage Jobs", href: "/employer/dashboard/jobs", icon: Briefcase },
   // { label: "Maritime Talent", href: "/employer/dashboard/talent", icon: Users },
