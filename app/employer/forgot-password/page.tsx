@@ -1,11 +1,12 @@
-// app/hr/forgot-password/page.tsx
+// app/employer/forgot-password/page.tsx
+
 "use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useRef } from "react";
 import dynamic from "next/dynamic";
-import api from "../lib/api"; // 🚀 FIXED: Path to app/lib/api
+import api from "../../lib/api";
 
 const ReCAPTCHA: any = dynamic(() => import("react-google-recaptcha"), { ssr: false });
 
@@ -21,7 +22,7 @@ function MaritimeIllustration() {
         <linearGradient id="waveFar" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#1a4a8a" />
           <stop offset="100%" stopColor="#123a6b" />
-       </linearGradient>
+        </linearGradient>
         <linearGradient id="waveNear" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#0a2a52" />
           <stop offset="100%" stopColor="#081d3d" />
@@ -61,6 +62,7 @@ export default function HrForgotPassword() {
   const [resendMessage, setResendMessage] = useState("");
   const resendRecaptchaRef = useRef<any>(null);
 
+  // 🚀 HR uses EMAIL (not phone)
   const [email, setEmail] = useState("");
   const [otpInput, setOtpInput] = useState("");
   const [tempToken, setTempToken] = useState("");
@@ -68,11 +70,14 @@ export default function HrForgotPassword() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
+  // ─────────────────────────────────────────────
+  // STEP 1 — Send OTP to email
+  // ─────────────────────────────────────────────
   function handleInitiateReset(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     if (!email.trim()) {
-      setError("Please enter your company email address.");
+      setError("Please enter your registered company email.");
       return;
     }
     setShowCaptcha(true);
@@ -82,14 +87,16 @@ export default function HrForgotPassword() {
     if (!token) return;
     try {
       setLoading(true);
-      setShowCaptcha(false); 
-      
-      const { data } = await api.post("/auth/forgot-password", {
-        email: email.trim().toLowerCase(),
-        recaptchaToken: token, 
-      }, {
-        headers: { Authorization: "" } // Prevent expired JWT 401 errors
-      });
+      setShowCaptcha(false);
+
+      const { data } = await api.post(
+        "/auth/forgot-password",
+        {
+          email: email.trim().toLowerCase(),
+          recaptchaToken: token,
+        },
+        { headers: { Authorization: "" } } // Bypass expired JWT for public route
+      );
 
       if (!data.success) {
         setError(data.message || "Failed to send OTP.");
@@ -105,22 +112,39 @@ export default function HrForgotPassword() {
     }
   }
 
+  // ─────────────────────────────────────────────
+  // STEP 2 — Verify OTP, get reset token
+  // ─────────────────────────────────────────────
   async function handleVerifyOtp(e: React.FormEvent) {
     e.preventDefault();
-    setError(""); setResendMessage("");
-    if (!otpInput.trim()) { setError("Please enter OTP."); return; }
+    setError("");
+    setResendMessage("");
+    if (!otpInput.trim()) {
+      setError("Please enter OTP.");
+      return;
+    }
     try {
       setLoading(true);
-      const { data } = await api.post("/auth/verify-forgot-otp", {
-        email: email.trim().toLowerCase(),
-        otp: otpInput.trim(),
-      }, {
-        headers: { Authorization: "" }
-      });
-      if (!data.success) { setError(data.message || "Invalid OTP."); return; }
+
+      const { data } = await api.post(
+        "/auth/verify-forgot-otp",
+        {
+          email: email.trim().toLowerCase(),
+          otp: otpInput.trim(),
+        },
+        { headers: { Authorization: "" } }
+      );
+
+      if (!data.success) {
+        setError(data.message || "Invalid OTP.");
+        return;
+      }
 
       const token = data.data?.resetToken || data.data?.accessToken;
-      if (!token) { setError("Token not received from server."); return; }
+      if (!token) {
+        setError("Token not received from server.");
+        return;
+      }
 
       setTempToken(token);
       setStep(3);
@@ -131,30 +155,42 @@ export default function HrForgotPassword() {
     }
   }
 
+  // ─────────────────────────────────────────────
+  // STEP 2b — Resend OTP
+  // ─────────────────────────────────────────────
   async function executeResendCode(token: string) {
     if (!token) return;
     try {
-      setResendLoading(true); 
-      setError(""); 
+      setResendLoading(true);
+      setError("");
       setResendMessage("");
       setShowResendCaptcha(false);
 
-      const { data } = await api.post("/auth/resend-forgot-password-otp", {
-        email: email.trim().toLowerCase(),
-        recaptchaToken: token,
-      }, {
-        headers: { Authorization: "" }
-      });
-      if (!data.success) { setError(data.message || "Failed to resend OTP."); return; }
+      const { data } = await api.post(
+        "/auth/resend-forgot-password-otp",
+        {
+          email: email.trim().toLowerCase(),
+          recaptchaToken: token,
+        },
+        { headers: { Authorization: "" } }
+      );
+
+      if (!data.success) {
+        setError(data.message || "Failed to resend OTP.");
+        return;
+      }
       setResendMessage("A new verification code has been sent to your email.");
     } catch (error: any) {
       setError(error.response?.data?.message || "Failed to resend OTP.");
     } finally {
-      setResendLoading(false); 
+      setResendLoading(false);
       resendRecaptchaRef.current?.reset();
     }
   }
 
+  // ─────────────────────────────────────────────
+  // STEP 3 — Reset password
+  // ─────────────────────────────────────────────
   async function handleResetPassword(e: React.FormEvent) {
     e.preventDefault();
     setError("");
@@ -164,16 +200,22 @@ export default function HrForgotPassword() {
 
     try {
       setLoading(true);
-      const { data } = await api.post("/auth/reset-password", {
-        token: tempToken,
-        password,
-        confirmPassword, 
-      }, {
-        headers: { Authorization: "" }
-      });
-      if (!data.success) { setError(data.message || "Password reset failed."); return; }
+      const { data } = await api.post(
+        "/auth/reset-password",
+        {
+          token: tempToken,
+          password,
+          confirmPassword,
+        },
+        { headers: { Authorization: "" } }
+      );
+
+      if (!data.success) {
+        setError(data.message || "Password reset failed.");
+        return;
+      }
       setSuccessMsg("Password reset successfully! Redirecting to login...");
-      setTimeout(() => router.push("/hr/login"), 2000);
+      setTimeout(() => router.push("/employer/login"), 2000);
     } catch (error: any) {
       setError(error.response?.data?.message || "Failed to reset password.");
     } finally {
@@ -183,7 +225,7 @@ export default function HrForgotPassword() {
 
   return (
     <div className="flex min-h-screen w-full bg-white">
-      {/* LEFT PANEL (Matches HR Login) */}
+      {/* LEFT PANEL */}
       <div className="relative hidden w-1/2 overflow-hidden lg:block">
         <MaritimeIllustration />
         <div className="relative z-10 flex h-full flex-col justify-between p-12 text-white">
@@ -206,15 +248,20 @@ export default function HrForgotPassword() {
             </p>
           </div>
 
-          <p className="text-[14px] text-blue-200/50">&copy; {new Date().getFullYear()} MerchantNavyJobs. Restricted access.</p>
+          <p className="text-[14px] text-blue-200/50">
+            &copy; {new Date().getFullYear()} MerchantNavyJobs. Restricted access.
+          </p>
         </div>
       </div>
 
-      {/* RIGHT PANEL (Forms) */}
+      {/* RIGHT PANEL */}
       <div className="flex w-full flex-col items-center justify-center bg-gray-50 px-6 py-12 lg:w-1/2">
         <div className="w-full max-w-sm">
-          
-          <Link href="/hr/login" className="mb-6 inline-block text-sm font-bold text-zinc-500 hover:text-blue-950 transition-colors">
+
+          <Link
+            href="/employer/login"
+            className="mb-6 inline-block text-sm font-bold text-zinc-500 hover:text-blue-950 transition-colors"
+          >
             &larr; Back to Login
           </Link>
 
@@ -232,77 +279,150 @@ export default function HrForgotPassword() {
               </p>
             </div>
 
-            {/* STEP 1 */}
+            {/* STEP 1 — Email + Captcha */}
             {step === 1 && (
               <form onSubmit={handleInitiateReset} className="space-y-4">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-zinc-600">Company Email Address</label>
-                  <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="hr@company.com" className="w-full rounded-lg border-slate-300 border-2 bg-white px-3 py-2.5 text-sm text-black focus:border-blue-950 focus:outline-none focus:ring-1 focus:ring-blue-950" />
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="hr@angloeastern.com"
+                    className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm text-black focus:border-blue-950 focus:outline-none focus:ring-1 focus:ring-blue-950 transition-all"
+                  />
                 </div>
+
                 {error && <p className="text-sm font-medium text-red-500">{error}</p>}
-                
+
                 {!showCaptcha ? (
-                  <button type="submit" disabled={loading || !email.trim()} className="w-full rounded-full bg-yellow-400 py-3 text-sm font-bold text-blue-950 shadow-sm transition-colors hover:bg-yellow-300 disabled:opacity-50">
+                  <button
+                    type="submit"
+                    disabled={loading || !email.trim()}
+                    className="w-full rounded-full bg-yellow-400 py-3 text-sm font-bold text-blue-950 shadow-sm transition-colors hover:bg-yellow-300 disabled:opacity-50"
+                  >
                     {loading ? "Preparing..." : "Send Verification Code"}
                   </button>
                 ) : (
                   <div className="flex flex-col items-center gap-4 pt-2">
-                    <ReCAPTCHA ref={recaptchaRef} sitekey={process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || ""} onChange={(token: string | null) => { if (token) { setRecaptchaToken(token); executeSendCode(token); } }} />
+                    <ReCAPTCHA
+                      ref={recaptchaRef}
+                      sitekey={process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || ""}
+                      onChange={(token: string | null) => {
+                        if (token) {
+                          setRecaptchaToken(token);
+                          executeSendCode(token);
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCaptcha(false)}
+                      className="text-xs font-semibold text-zinc-500 hover:text-zinc-800"
+                    >
+                      Cancel
+                    </button>
                   </div>
                 )}
               </form>
             )}
 
-            {/* STEP 2 */}
+            {/* STEP 2 — Verify OTP */}
             {step === 2 && (
               <form onSubmit={handleVerifyOtp} className="space-y-4">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-zinc-600">Verification Code</label>
-                  <input type="text" maxLength={6} required value={otpInput} onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))} placeholder="000000" className="w-full rounded-lg border-slate-300 border-2 bg-white py-3 text-center text-xl tracking-[0.5em] font-bold text-black focus:border-blue-950 focus:outline-none focus:ring-1 focus:ring-blue-950" />
+                  <input
+                    type="text"
+                    maxLength={6}
+                    required
+                    value={otpInput}
+                    onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ""))}
+                    placeholder="000000"
+                    className="w-full rounded-lg border-slate-300 border-2 bg-white py-3 text-center text-xl tracking-[0.5em] font-bold text-black focus:border-blue-950 focus:outline-none focus:ring-1 focus:ring-blue-950"
+                  />
                 </div>
 
                 {error && <p className="text-sm font-medium text-red-500">{error}</p>}
-                
+
                 <div className="flex gap-2">
-                  <button type="button" onClick={() => { setStep(1); setError(""); setResendMessage(""); }} className="rounded-full border-slate-300 border-2 px-4 py-3 text-sm font-bold text-zinc-600 hover:bg-zinc-50 transition-colors">
+                  <button
+                    type="button"
+                    onClick={() => { setStep(1); setError(""); setResendMessage(""); }}
+                    className="rounded-full border-slate-300 border-2 px-4 py-3 text-sm font-bold text-zinc-600 hover:bg-zinc-50 transition-colors"
+                  >
                     Back
                   </button>
-                  <button type="submit" disabled={loading || resendLoading} className="flex-1 rounded-full bg-yellow-400 py-3 text-sm font-bold text-blue-950 shadow-sm transition-colors hover:bg-yellow-300 disabled:opacity-50">
+                  <button
+                    type="submit"
+                    disabled={loading || resendLoading}
+                    className="flex-1 rounded-full bg-yellow-400 py-3 text-sm font-bold text-blue-950 shadow-sm transition-colors hover:bg-yellow-300 disabled:opacity-50"
+                  >
                     {loading ? "Verifying..." : "Verify Code"}
                   </button>
                 </div>
 
                 <div className="pt-2 text-center">
-                  {resendMessage && <p className="mb-4 text-xs font-semibold text-emerald-600">{resendMessage}</p>}
+                  {resendMessage && (
+                    <p className="mb-4 text-xs font-semibold text-emerald-600">{resendMessage}</p>
+                  )}
                   {!showResendCaptcha ? (
-                    <button type="button" disabled={loading || resendLoading} onClick={() => { setError(""); setResendMessage(""); setShowResendCaptcha(true); }} className="text-xs font-bold text-blue-600 hover:underline">
+                    <button
+                      type="button"
+                      disabled={loading || resendLoading}
+                      onClick={() => { setError(""); setResendMessage(""); setShowResendCaptcha(true); }}
+                      className="text-xs font-bold text-blue-600 hover:underline"
+                    >
                       Didn't receive code? Resend
                     </button>
                   ) : (
                     <div className="flex flex-col items-center gap-3">
-                      <ReCAPTCHA ref={resendRecaptchaRef} sitekey={process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || ""} onChange={(token: string | null) => { if (token) executeResendCode(token); }} />
+                      <ReCAPTCHA
+                        ref={resendRecaptchaRef}
+                        sitekey={process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || ""}
+                        onChange={(token: string | null) => { if (token) executeResendCode(token); }}
+                      />
                     </div>
                   )}
                 </div>
               </form>
             )}
 
-            {/* STEP 3 */}
+            {/* STEP 3 — Reset Password */}
             {step === 3 && (
               <form onSubmit={handleResetPassword} className="space-y-4">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-zinc-600">New Password</label>
-                  <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="w-full rounded-lg border-slate-300 border-2 bg-white px-3 py-2.5 text-sm text-black focus:border-blue-950 focus:outline-none focus:ring-1 focus:ring-blue-950" />
+                  <input
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full rounded-lg border-slate-300 border-2 bg-white px-3 py-2.5 text-sm text-black focus:border-blue-950 focus:outline-none focus:ring-1 focus:ring-blue-950"
+                  />
                 </div>
                 <div>
                   <label className="mb-1 block text-sm font-medium text-zinc-600">Confirm Password</label>
-                  <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="••••••••" className="w-full rounded-lg border-slate-300 border-2 bg-white px-3 py-2.5 text-sm text-black focus:border-blue-950 focus:outline-none focus:ring-1 focus:ring-blue-950" />
+                  <input
+                    type="password"
+                    required
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full rounded-lg border-slate-300 border-2 bg-white px-3 py-2.5 text-sm text-black focus:border-blue-950 focus:outline-none focus:ring-1 focus:ring-blue-950"
+                  />
                 </div>
 
                 {error && <p className="text-sm font-medium text-red-500">{error}</p>}
                 {successMsg && <p className="text-sm font-medium text-emerald-600">{successMsg}</p>}
 
-                <button type="submit" disabled={loading} className="w-full rounded-full bg-yellow-400 py-3 text-sm font-bold text-blue-950 shadow-sm transition-colors hover:bg-yellow-300 disabled:opacity-50">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full rounded-full bg-yellow-400 py-3 text-sm font-bold text-blue-950 shadow-sm transition-colors hover:bg-yellow-300 disabled:opacity-50"
+                >
                   {loading ? "Updating..." : "Update Password"}
                 </button>
               </form>
