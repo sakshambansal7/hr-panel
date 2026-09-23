@@ -142,7 +142,7 @@ export default function LoginForm() {
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-700 tracking-wide uppercase">
-                Email / Mobile / Username
+                Email 
               </label>
               <div className="relative">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
