@@ -28,10 +28,12 @@ function decodeJWT(token: string) {
 export type Role = "candidate" | "employer" | "admin" | "editor" | "superadmin";
 
 export type User = {
+  id?: number | string;              // 🚀 ADDED
   name: string;
   email: string;
   role: Role;
-  phone_number?: string; // 🚀 ADDED: Required for HR Profile
+  phone_number?: string;
+  company_id?: number | null;        // 🚀 ADDED
   lastLoginAt?: string;
 };
 
@@ -40,7 +42,8 @@ export type ApiUser = {
   name: string;
   email: string;
   role: string;
-  phone_number?: string; // 🚀 ADDED: Required for HR Profile
+  phone_number?: string;
+  company_id?: number | null;        // 🚀 ADDED
 };
 
 // Maps the roles the real backend uses onto this app's internal Role type
@@ -57,7 +60,7 @@ type AuthContextValue = {
   user: User | null;
   ready: boolean;
   setSessionUser: (apiUser: ApiUser, token?: string) => void;
-  updateLocalUser: (patch: Partial<User>) => void; // 🚀 ADDED
+  updateLocalUser: (patch: Partial<User>) => void;
   logout: () => void;
 };
 
@@ -79,25 +82,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (token) {
         setAuthToken(token); // Inject into Axios instantly
         const decoded = decodeJWT(token);
-        
+
         if (rawSession) {
           const parsedUser = JSON.parse(rawSession) as User;
-          
+
           // Merge JWT data to ensure roles are always up to date
           if (decoded) {
+            if (decoded.id) parsedUser.id = decoded.id;                            // 🚀 ADDED
             if (decoded.email) parsedUser.email = decoded.email;
             if (decoded.name) parsedUser.name = decoded.name;
             if (decoded.phone_number) parsedUser.phone_number = decoded.phone_number;
             if (decoded.role) parsedUser.role = mapApiRole(decoded.role);
+            if (decoded.company_id) parsedUser.company_id = decoded.company_id;    // 🚀 ADDED (if JWT contains it)
           }
-          
+
           setUser(parsedUser);
         } else if (decoded) {
           // Fallback if session storage was wiped but token still exists
           const recoveredUser: User = {
+            id: decoded.id || undefined,                                           // 🚀 ADDED
             name: decoded.name || decoded.email || "Employer",
             email: decoded.email || "",
             phone_number: decoded.phone_number || "",
+            company_id: decoded.company_id || null,                                // 🚀 ADDED
             role: mapApiRole(decoded.role),
           };
           setUser(recoveredUser);
@@ -107,7 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       console.error("Failed to restore session from token", e);
     }
-    
+
     setReady(true);
   }, []);
 
@@ -123,26 +130,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const lastLoginAt = new Date().toISOString();
-    
+
     const session: User = {
-      name: apiUser.name || apiUser.email, 
+      id: apiUser.id,                                      // 🚀 ADDED
+      name: apiUser.name || apiUser.email,
       email: apiUser.email,
-      phone_number: apiUser.phone_number, // 🚀 ADDED
-      role: finalRole, 
+      phone_number: apiUser.phone_number,
+      company_id: apiUser.company_id ?? null,              // 🚀 ADDED
+      role: finalRole,
       lastLoginAt,
     };
-    
+
     window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    
+
     if (token) {
       window.localStorage.setItem(TOKEN_KEY, token);
       setAuthToken(token); // Inject into Axios for future requests
     }
-    
+
     setUser(session);
   }
 
-  // 🚀 NEW: LOCAL UPDATE HANDLER (For Profile Page)
+  // 🚀 LOCAL UPDATE HANDLER (For Profile Page)
   function updateLocalUser(patch: Partial<User>) {
     setUser((prev) => {
       if (!prev) return prev;
@@ -155,7 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // 🚀 REAL PRODUCTION LOGOUT HANDLER
   async function logout() {
     try {
-      await api.post("/auth/logout"); 
+      await api.post("/auth/logout");
     } catch (err) {
       console.error("Backend logout failed", err);
     }

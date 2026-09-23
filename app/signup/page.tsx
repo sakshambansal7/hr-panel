@@ -1,17 +1,16 @@
 // app/signup/page.tsx
 
-
 "use client";
 
 import { Suspense } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useMemo, useRef } from "react";
-import api from "../lib/api"; 
+import api from "../lib/api";
 import { useAuth } from "../context/auth-context";
 import { ChevronDown, Search } from "lucide-react";
 
-function SectionHeading({ title, description }: { title: string; description: string; }) {
+function SectionHeading({ title, description }: { title: string; description: string }) {
   return (
     <div className="flex items-start gap-3">
       <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#0F172A] text-xs font-bold text-white">
@@ -25,7 +24,7 @@ function SectionHeading({ title, description }: { title: string; description: st
   );
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode; }) {
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
       <label className="text-xs font-semibold text-slate-700 tracking-wide uppercase">
@@ -69,12 +68,12 @@ function SearchableSelect({
 
   const filtered = useMemo(() => {
     const safeOptions = Array.isArray(options) ? options : [];
-    if (!query) return safeOptions; 
+    if (!query) return safeOptions;
 
-    const cleanQuery = query.toLowerCase().replace(/[^a-z0-9]/g, ''); 
+    const cleanQuery = query.toLowerCase().replace(/[^a-z0-9]/g, "");
     return safeOptions.filter((opt) => {
       if (!opt) return false;
-      return opt.toLowerCase().replace(/[^a-z0-9]/g, '').includes(cleanQuery);
+      return opt.toLowerCase().replace(/[^a-z0-9]/g, "").includes(cleanQuery);
     });
   }, [options, query]);
 
@@ -142,7 +141,7 @@ const inputClass =
 
 function SignupFormContent() {
   const router = useRouter();
-  const { setSessionUser } = useAuth(); 
+  const { setSessionUser } = useAuth();
 
   const [isLoading, setIsLoading] = useState(false);
 
@@ -163,27 +162,29 @@ function SignupFormContent() {
   const [otpNotice, setOtpNotice] = useState("");
   const [emailVerified, setEmailVerified] = useState(false);
 
+  // 🚀 Load companies once on mount
   useEffect(() => {
-    api.get("/companies/dropdown?limit=all")
+    api.get("/companies", { params: { limit: 500, page: 1 } })
       .then((res) => {
         const payload = res.data?.data;
-        const companyArray = Array.isArray(payload) ? payload : (Array.isArray(payload?.data) ? payload.data : []);
+        const companyArray = Array.isArray(payload?.data)
+          ? payload.data
+          : Array.isArray(payload)
+          ? payload
+          : [];
 
-        if (companyArray.length > 0) {
-          const cleanedCompanies = companyArray.map((c: any) => ({
-            id: c.id,
-            name: formatTitleCase(c.name || c.company_name || c.email || "Unknown Organization"),
-            rawEmail: c.email
-          }));
+        const cleanedCompanies = companyArray.map((c: any) => ({
+          id: c.id,
+          name: formatTitleCase(c.name || c.company_name || "Unknown Organization"),
+          rawEmail: c.email,
+        }));
 
-          const sortedCompanies = cleanedCompanies.sort((a: any, b: any) => 
-            a.name.localeCompare(b.name)
-          );
-          
-          setAvailableCompanies(sortedCompanies);
-        }
+        cleanedCompanies.sort((a: any, b: any) => a.name.localeCompare(b.name));
+        setAvailableCompanies(cleanedCompanies);
       })
-      .catch((err) => console.error("Failed to load companies:", err));
+      .catch((err) => {
+        console.error("Failed to load companies:", err?.response?.status, err?.response?.data);
+      });
   }, []);
 
   function handleEmailChange(value: string) {
@@ -217,14 +218,14 @@ function SignupFormContent() {
       const payload = {
         name: fullName.trim(),
         email: officialEmail.trim().toLowerCase(),
-        phone_number: `+91${mobileNumber.trim()}`, 
+        phone_number: `+91${mobileNumber.trim()}`,
         password: password,
-        confirmPassword: confirmPassword, 
-        company_id: selectedCompanyId, 
+        confirmPassword: confirmPassword,
+        company_id: selectedCompanyId,
       };
 
       const response = await api.post("auth/hr/send-otp", payload);
-      
+
       if (response.data.success) {
         setOtpSent(true);
         setOtpNotice("Verification code sent! Please check your inbox.");
@@ -250,7 +251,7 @@ function SignupFormContent() {
       const response = await api.post("/auth/resend-registration-otp", {
         email: officialEmail.trim().toLowerCase(),
       });
-      
+
       if (response.data.success || response.status === 200) {
         setOtpNotice("New verification code sent! Please check your inbox.");
       }
@@ -272,17 +273,27 @@ function SignupFormContent() {
 
     try {
       setIsLoading(true);
-      const { data } = await api.post("auth/hr/verify-otp", { 
-        email: officialEmail.trim().toLowerCase(), 
-        otp: otpValue.trim() 
+      const { data } = await api.post("auth/hr/verify-otp", {
+        email: officialEmail.trim().toLowerCase(),
+        otp: otpValue.trim(),
       });
 
       if (data.success) {
         setEmailVerified(true);
         setOtpSent(false);
+
         if (data.data?.user) {
-          setSessionUser(data.data.user, data.data.accessToken);
+          // 🚀 CRITICAL FIX: Merge company_id from our local state
+          // Even if backend forgets to include it, we KNOW the correct value
+          setSessionUser(
+            {
+              ...data.data.user,
+              company_id: selectedCompanyId ? Number(selectedCompanyId) : null,
+            },
+            data.data.accessToken
+          );
         }
+
         setOtpNotice("Email verified successfully! You can now access your dashboard.");
       } else {
         setOtpError(data.message || "Invalid OTP code.");
@@ -303,13 +314,12 @@ function SignupFormContent() {
       return;
     }
 
-    // Direct redirect to the HR Dashboard
     router.push("/employer/dashboard");
   }
 
   return (
     <div className="flex min-h-screen w-full flex-col lg:flex-row bg-[#F8FAFC] font-sans antialiased selection:bg-[#FBBF24]/30">
-       <div className="relative flex w-full flex-col justify-between overflow-hidden bg-gradient-to-br from-[#0F172A] to-[#13294B] p-8 md:p-12 lg:w-2/5 lg:sticky lg:top-0 lg:h-screen">
+      <div className="relative flex w-full flex-col justify-between overflow-hidden bg-gradient-to-br from-[#0F172A] to-[#13294B] p-8 md:p-12 lg:w-2/5 lg:sticky lg:top-0 lg:h-screen">
         <div className="absolute -left-1/4 -top-1/4 h-[80%] w-[80%] rounded-full bg-blue-500/10 blur-[120px] pointer-events-none" />
         <div className="absolute -bottom-1/4 -right-1/4 h-[80%] w-[80%] rounded-full bg-amber-500/5 blur-[120px] pointer-events-none" />
 
@@ -357,7 +367,7 @@ function SignupFormContent() {
         </div>
       </div>
 
-       <div className="flex w-full flex-col items-center bg-white px-6 py-12 md:px-12 lg:w-3/5">
+      <div className="flex w-full flex-col items-center bg-white px-6 py-12 md:px-12 lg:w-3/5">
         <div className="w-full max-w-2xl space-y-10">
           <div className="space-y-2">
             <span className="text-[11px] font-bold tracking-widest text-[#13294B] uppercase block">
@@ -372,23 +382,22 @@ function SignupFormContent() {
             <div className="space-y-5">
               <SectionHeading title="HR / Recruiter Details" description="Select your company and verify your identity." />
               <div className="grid gap-5 sm:grid-cols-2">
-                
+
                 <div className="sm:col-span-2 relative z-50">
                   <Field label="Search Your Company" required>
-                   <SearchableSelect 
-                    options={availableCompanies.map(comp => comp.name)}
-                    value={availableCompanies.find(c => String(c.id) === String(selectedCompanyId))?.name || ""}
-                    onChange={(selectedName: string) => {
-                      if (!selectedName) {
-                        setSelectedCompanyId("");
-                        return;
-                      }
-                      const comp = availableCompanies.find(c => c.name === selectedName);
-                      console.log("🏢 Selected Company Object:", comp); // Debug log
-                      setSelectedCompanyId(comp ? String(comp.id) : "");
-                    }} 
-                    placeholder="-- Type to search your registered organization --"
-                  />
+                    <SearchableSelect
+                      options={availableCompanies.map((comp) => comp.name)}
+                      value={availableCompanies.find((c) => String(c.id) === String(selectedCompanyId))?.name || ""}
+                      onChange={(selectedName: string) => {
+                        if (!selectedName) {
+                          setSelectedCompanyId("");
+                          return;
+                        }
+                        const comp = availableCompanies.find((c) => c.name === selectedName);
+                        setSelectedCompanyId(comp ? String(comp.id) : "");
+                      }}
+                      placeholder="-- Type to search your registered organization --"
+                    />
                   </Field>
                 </div>
 
@@ -410,10 +419,10 @@ function SignupFormContent() {
                     <div className="flex gap-2">
                       <input type="email" required value={officialEmail} onChange={(e) => handleEmailChange(e.target.value)} className={inputClass} placeholder="hr@company.com" />
                       {!emailVerified && (
-                        <button 
-                          type="button" 
-                          onClick={otpSent ? handleResendOtp : handleSendOtp} 
-                          disabled={isLoading} 
+                        <button
+                          type="button"
+                          onClick={otpSent ? handleResendOtp : handleSendOtp}
+                          disabled={isLoading}
                           className="shrink-0 whitespace-nowrap rounded-2xl border border-slate-300 bg-slate-100 px-5 text-xs font-bold text-[#0F172A] transition-colors hover:bg-slate-200 disabled:opacity-50 shadow-sm"
                         >
                           {isLoading ? "Processing..." : otpSent ? "Resend OTP" : "Send OTP"}
@@ -451,12 +460,12 @@ function SignupFormContent() {
               </div>
             )}
 
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               disabled={!emailVerified}
               className="group relative flex w-full items-center justify-center gap-2 rounded-2xl bg-[#FBBF24] py-4 text-sm font-bold text-[#0F172A] shadow-lg shadow-amber-500/10 transition-all duration-300 hover:bg-[#FCD34D] hover:shadow-xl hover:shadow-amber-500/20 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-               Go to Dashboard
+              Go to Dashboard
               <span className="transition-transform duration-200 group-hover:translate-x-1">→</span>
             </button>
           </form>
