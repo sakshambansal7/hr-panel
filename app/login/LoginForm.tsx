@@ -168,7 +168,7 @@ export default function LoginForm() {
                 </label>
                 {/* 🚀 FIXED: Working Next.js Link pointing to forgot-password flow */}
                 <Link 
-                  href="/forgot-password" 
+                  href="/employer/forgot-password" 
                   className="text-xs font-bold text-amber-600 hover:text-amber-700 hover:underline flex items-center gap-0.5"
                 >
                   Forgot Password? <span className="text-[10px] font-normal">&gt;</span>
