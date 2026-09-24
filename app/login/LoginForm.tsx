@@ -142,7 +142,7 @@ export default function LoginForm() {
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-700 tracking-wide uppercase">
-                Email 
+                Email / Mobile / Username
               </label>
               <div className="relative">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
@@ -168,7 +168,7 @@ export default function LoginForm() {
                 </label>
                 {/* 🚀 FIXED: Working Next.js Link pointing to forgot-password flow */}
                 <Link 
-                  href="employer/forgot-password" 
+                  href="/forgot-password" 
                   className="text-xs font-bold text-amber-600 hover:text-amber-700 hover:underline flex items-center gap-0.5"
                 >
                   Forgot Password? <span className="text-[10px] font-normal">&gt;</span>
