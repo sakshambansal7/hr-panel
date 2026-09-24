@@ -196,6 +196,24 @@ function SignupFormContent() {
     setEmailVerified(false);
   }
 
+
+  // Auto-clear the main error after 5 seconds
+useEffect(() => {
+  if (!error) return;
+  const t = setTimeout(() => setError(""), 5000);
+  return () => clearTimeout(t);
+}, [error]);
+
+// Auto-clear the OTP error after 5 seconds
+useEffect(() => {
+  if (!otpError) return;
+  const t = setTimeout(() => setOtpError(""), 5000);
+  return () => clearTimeout(t);
+}, [otpError]);
+
+
+
+
   async function handleSendOtp() {
     setOtpError("");
     setOtpNotice("");
@@ -230,11 +248,21 @@ function SignupFormContent() {
         setOtpSent(true);
         setOtpNotice("Verification code sent! Please check your inbox.");
       }
-    } catch (err: any) {
-      setOtpError(err.response?.data?.message || "Failed to send OTP.");
-    } finally {
-      setIsLoading(false);
-    }
+   } catch (err: any) {
+  const data = err.response?.data;
+  const fieldMsg = Array.isArray(data?.errors) && data.errors[0]?.message
+    ? data.errors[0].message
+    : null;
+
+  setOtpError(
+    fieldMsg ||
+    data?.message ||
+    (err.code === "ERR_NETWORK" && "Network error. Please check your connection.") ||
+    "Failed to send OTP."
+  );
+} finally {
+  setIsLoading(false);
+}
   }
 
   async function handleResendOtp() {
@@ -255,11 +283,21 @@ function SignupFormContent() {
       if (response.data.success || response.status === 200) {
         setOtpNotice("New verification code sent! Please check your inbox.");
       }
-    } catch (err: any) {
-      setOtpError(err.response?.data?.message || "Failed to resend OTP.");
-    } finally {
-      setIsLoading(false);
-    }
+  } catch (err: any) {
+  const data = err.response?.data;
+  const fieldMsg = Array.isArray(data?.errors) && data.errors[0]?.message
+    ? data.errors[0].message
+    : null;
+
+  setOtpError(
+    fieldMsg ||
+    data?.message ||
+    (err.code === "ERR_NETWORK" && "Network error. Please check your connection.") ||
+    "Failed to resend OTP."
+  );
+} finally {
+  setIsLoading(false);
+}
   }
 
   async function handleVerifyOtp() {
@@ -298,12 +336,27 @@ function SignupFormContent() {
       } else {
         setOtpError(data.message || "Invalid OTP code.");
       }
-    } catch (err: any) {
-      setOtpError(err.response?.data?.message || "OTP verification failed.");
-    } finally {
-      setIsLoading(false);
-    }
+  } catch (err: any) {
+  const data = err.response?.data;
+  const fieldMsg = Array.isArray(data?.errors) && data.errors[0]?.message
+    ? data.errors[0].message
+    : null;
+
+  setOtpError(
+    fieldMsg ||
+    data?.message ||
+    (err.code === "ERR_NETWORK" && "Network error. Please check your connection.") ||
+    "OTP verification failed."
+  );
+} finally {
+  setIsLoading(false);
+}
   }
+
+
+
+
+
 
   function handleCompleteRegistration(e: React.FormEvent) {
     e.preventDefault();

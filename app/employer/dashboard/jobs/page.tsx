@@ -426,7 +426,7 @@ export default function JobsClient() {
                       )}
                     </div>
                     <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mt-2">
-                      Applicants
+                     View Applicants
                     </span>
                   </Link>
                 </div>
